@@ -52,8 +52,15 @@ def check():
                 failures.append(f"CAPTION MISMATCH on {url} (pin {p['name']}) - "
                                 "a reel is attached to the wrong venue")
 
-    dupes = [u for u, n in seen.items() if n > 1]
-    want(not dupes, f"{len(dupes)} reels appear under more than one pin: {dupes[:3]}")
+    # A reel may legitimately sit on several pins - that is listicle expansion, one reel
+    # naming five restaurants. What must NOT happen is a reel appearing on more pins than
+    # extraction ever found venues in it, which would mean a duplicate crept in.
+    extracted_per_reel = collections.Counter(v["reel_url"] for v in extracted)
+    for url, n in seen.items():
+        if n > 1:
+            want(n <= extracted_per_reel.get(url, 1),
+                 f"reel {url} is on {n} pins but extraction found only "
+                 f"{extracted_per_reel.get(url, 1)} venue(s) in it - duplicate pin")
 
     # 2. Extracted candidates carry untouched captions too.
     for v in extracted:
@@ -91,7 +98,7 @@ def check():
             print(f"  ... and {len(failures) - 25} more")
         sys.exit(1)
 
-    print(f"OK  {len(pins)} pins · {sum(seen.values())} reels on the map · "
+    print(f"OK  {len(pins)} pins · {len(seen)} reels on the map · "
           f"{len(extracted)} extracted candidates · {len(no_venue)} with no venue")
     print(f"OK  all {len(raw)} raw reels accounted for, 0 caption mismatches")
 

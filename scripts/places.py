@@ -8,7 +8,7 @@ Google Places API (New). The fields we want - rating, opening hours, phone, webs
 billed on the Enterprise SKU, which carries ~1,000 free calls/month. One searchText call
 per venue returns everything, so never follow up with a separate Place Details call.
 """
-import json, os, re, math, difflib, urllib.request, urllib.error
+import json, os, re, math, difflib, unicodedata, urllib.request, urllib.error
 
 ENDPOINT = "https://places.googleapis.com/v1/places:searchText"
 FIELDS = ",".join("places." + f for f in [
@@ -40,9 +40,31 @@ def looks_like_address(name):
 
 
 def normalize(name):
-    n = re.sub(r"[^a-z0-9 ]", " ", (name or "").lower())
+    # Fold accents first: "Gokyuzu" vs "Gokyuzu" with diacritics scored 0.58 and was
+    # rejected as a different venue, because stripping non-ascii mangled the word.
+    n = unicodedata.normalize("NFKD", name or "")
+    n = "".join(c for c in n if not unicodedata.combining(c)).lower()
+    n = re.sub(r"[^a-z0-9 ]", " ", n)
     n = re.sub(r"\b(the|london|ltd|limited|uk|official)\b", " ", n)
     return " ".join(n.split())
+
+
+def name_similarity(a, b):
+    """Similarity that understands "JOIA" and "JOIA Restaurant, Bar & Rooftop" are one
+    venue. Raw ratio scores that pair 0.33 purely because of the length difference, which
+    rejected a pile of correct matches. Whole-word containment is the signal that matters
+    for venue names that carry a descriptive tail."""
+    na, nb = normalize(a), normalize(b)
+    if not na or not nb:
+        return 0.0
+    if na == nb:
+        return 1.0
+    wa, wb = na.split(), nb.split()
+    if wa[:len(wb)] == wb or wb[:len(wa)] == wa:
+        return 0.92          # one is a prefix of the other, word-for-word
+    if set(wa) <= set(wb) or set(wb) <= set(wa):
+        return 0.86          # every word of the shorter appears in the longer
+    return difflib.SequenceMatcher(None, na, nb).ratio()
 
 
 def haversine_km(a, b):
@@ -55,9 +77,12 @@ def haversine_km(a, b):
 
 def score(our_name, our_ll, cand_name, cand_ll):
     """0.7 name + 0.3 distance. Returns (combined, name_sim, dist_km|None)."""
-    name_sim = difflib.SequenceMatcher(None, normalize(our_name), normalize(cand_name)).ratio()
+    name_sim = name_similarity(our_name, cand_name)
     if our_ll is None:
-        return 0.7 * name_sim + 0.3 * 0.5, name_sim, None   # no coords: distance is neutral
+        # No coordinates to compare, so distance carries no information. Blending in a
+        # neutral 0.5 just dilutes a good name match below the bar - a word-for-word
+        # containment match scored 0.794 against a 0.80 threshold and was rejected.
+        return name_sim, name_sim, None
     dist = haversine_km(our_ll, cand_ll)
     dist_score = max(0.0, 1.0 - dist / 1.0)                 # 1.0 at 0km, 0 at >=1km
     return 0.7 * name_sim + 0.3 * dist_score, name_sim, dist
@@ -80,9 +105,12 @@ def decide(our_name, our_ll, candidates):
     # Chain trap: the name matches beautifully but it is miles away.
     if best["dist_km"] is not None and best["dist_km"] > CHAIN_TRAP_KM and best["name_sim"] >= 0.85:
         return "review", best, scored
-    # Two candidates too close to call.
+    # Two candidates too close to call - but only when they are genuinely different
+    # places. Several branches of one chain all named "Kricket" is not ambiguity about
+    # WHICH VENUE it is, and treating it as such rejected a pile of correct matches.
     if len(scored) > 1 and abs(scored[0]["combined"] - scored[1]["combined"]) < 0.05 \
-            and best["combined"] < 0.92:
+            and best["combined"] < 0.92 \
+            and name_similarity(disp(scored[0]["cand"]), disp(scored[1]["cand"])) < 0.85:
         return "review", best, scored
     if best["combined"] >= ACCEPT:
         return "accept", best, scored

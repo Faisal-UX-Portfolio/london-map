@@ -116,6 +116,8 @@ _SEG_RE = re.compile(
     rf'^((?:(?:{_DAY_TOKEN})(?:-(?:{_DAY_TOKEN}))?)(?:,\s*(?:(?:{_DAY_TOKEN})(?:-(?:{_DAY_TOKEN}))?))*)'
     rf'\s+(.+)$')
 _TIME_RE = re.compile(r'^([0-2]\d:[0-5]\d)-([0-2]\d:[0-5]\d)$')
+_BARE_TIMES_RE = re.compile(  # a rule with no day selector at all applies every day (spec)
+    r'^[0-2]\d:[0-5]\d-[0-2]\d:[0-5]\d(?:,\s*[0-2]\d:[0-5]\d-[0-2]\d:[0-5]\d)*$')
 _UNSUPPORTED_RE = re.compile(
     r'\b(sunrise|sunset|week|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|open)\b|"',
     re.I)
@@ -142,6 +144,30 @@ def _expand_days(days_part):
     return days
 
 
+def _split_rule_chain(seg):
+    """A single ';'-separated segment is sometimes itself a chain of "days time" clauses
+    joined by commas instead of semicolons - very common in the wild, e.g.
+    "Mo 09:00-18:00, Tu 09:00-20:00, We ...". A comma only starts a new clause when what
+    follows it also parses as a full "days time" clause; otherwise it's just another day in
+    the same day-list ("Tu-Th, Su ...") or another time range for the same days
+    ("12:00-15:00,18:00-23:00"). Returns a list of (days_part, rest) pairs, or None."""
+    clauses = []
+    remaining = seg
+    while remaining:
+        m = _SEG_RE.match(remaining)
+        if not m:
+            return None
+        days_part, tail = m.group(1), m.group(2)
+        split_at = next((cm for cm in re.finditer(r',\s*', tail)
+                         if _SEG_RE.match(tail[cm.end():])), None)
+        if split_at is None:
+            clauses.append((days_part, tail.strip()))
+            break
+        clauses.append((days_part, tail[:split_at.start()].strip()))
+        remaining = tail[split_at.end():]
+    return clauses
+
+
 def parse_opening_hours(value):
     """OSM opening_hours -> 7 "Mon: 09:00-17:00" strings (Monday first), or None."""
     if not value or not isinstance(value, str):
@@ -159,27 +185,26 @@ def parse_opening_hours(value):
 
     day_hours = {d: None for d in _DAYS}  # None = untouched, "off" = closed, else [ranges]
     for seg in segments:
-        m = _SEG_RE.match(seg)
-        if not m:
+        # a rule with no day selector at all applies to every day (per the OSM spec)
+        clauses = [("Mo-Su", seg)] if _BARE_TIMES_RE.match(seg) else _split_rule_chain(seg)
+        if clauses is None:
             return None
-        days = _expand_days(m.group(1))
-        if days is None:
-            return None
-        rest = m.group(2).strip()
-
-        if rest.lower() in ("off", "closed"):
-            for d in days:
-                day_hours[d] = "off"
-            continue
-
-        times = []
-        for part in rest.split(","):
-            tm = _TIME_RE.match(part.strip())
-            if not tm:
+        for days_part, rest in clauses:
+            days = _expand_days(days_part)
+            if days is None:
                 return None
-            times.append(f"{tm.group(1)}-{tm.group(2)}")
-        for d in days:
-            day_hours[d] = times
+            if rest.lower() in ("off", "closed"):
+                for d in days:
+                    day_hours[d] = "off"
+                continue
+            times = []
+            for part in rest.split(","):
+                tm = _TIME_RE.match(part.strip())
+                if not tm:
+                    return None
+                times.append(f"{tm.group(1)}-{tm.group(2)}")
+            for d in days:
+                day_hours[d] = times
 
     return [f"{_FULL[i]}: " + (", ".join(day_hours[d]) if isinstance(day_hours[d], list) else "Closed")
             for i, d in enumerate(_DAYS)]
@@ -277,6 +302,23 @@ def _selftest():
     # a space after the comma in a day list is common in the wild and must still parse
     r = poh("Mo 13:00-22:00; Tu-Th, Su 12:00-22:00; Fr, Sa 12:00-23:00")
     assert r[0] == "Mon: 13:00-22:00" and r[6] == "Sun: 12:00-22:00" and r[4] == "Fri: 12:00-23:00"
+
+    # a chain of "days time" clauses joined by commas instead of semicolons - seen a lot in
+    # live London OSM data - must be split into separate rules, not misread as one big list
+    r = poh("Mo 09:00-18:00, Tu 09:00-20:00, We 09:00-18:00, Th 09:00-20:00, "
+            "Fr 08:00-17:00, Sa-Su 10:00-16:00")
+    assert r == ["Mon: 09:00-18:00", "Tue: 09:00-20:00", "Wed: 09:00-18:00", "Thu: 09:00-20:00",
+                 "Fri: 08:00-17:00", "Sat: 10:00-16:00", "Sun: 10:00-16:00"]
+    r = poh("Mo-Th 07:00-19:00, Th,Fr 07:00-22:00, Su 08:00-19:00")
+    assert r[3] == "Thu: 07:00-22:00" and r[4] == "Fri: 07:00-22:00" and r[6] == "Sun: 08:00-19:00"
+    assert r[5] == "Sat: Closed"  # never mentioned -> closed, not guessed
+
+    # a rule with no day selector at all applies to every day (this is what the spec says,
+    # not a guess) - and multiple time ranges in a day still work here too
+    assert poh("07:00-23:00") == [f"{d}: 07:00-23:00" for d in
+                                   ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]]
+    r = poh("12:00-15:00,17:00-22:00")
+    assert all(x.endswith("12:00-15:00, 17:00-22:00") for x in r)
 
     # malformed / unsupported -> None, never a guess
     assert poh(None) is None

@@ -235,7 +235,11 @@ function renderChips() {
     b.onclick = handler;
     row.appendChild(b);
   };
-  toggle('chipOpen', openNow, 'Open now', () => { openNow = !openNow; refresh(); });
+  // Only offer "Open now" if any pin actually has hours. With no enrichment data it is
+  // a control that can never change the result, which is worse than no control.
+  if (PINS.some((p) => Array.isArray(p.hours))) {
+    toggle('chipOpen', openNow, 'Open now', () => { openNow = !openNow; refresh(); });
+  }
   toggle('chipNear', sortByDistance, 'Near me', () => {
     if (!me) { locate(true); return; }
     sortByDistance = !sortByDistance; refresh();
