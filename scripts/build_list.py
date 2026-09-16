@@ -46,6 +46,29 @@ def tidy(address):
     return out or "—"
 
 
+def hours_cell(p):
+    """Prefer the compact week summary we parsed; fall back to the raw source text."""
+    if p.get("status") == "closed":
+        return "Permanently closed"
+    if isinstance(p.get("hours"), list):
+        return summarise(p["hours"]).replace("|", "")
+    return (p.get("hours_text") or "—").replace("|", "")
+
+
+def summarise(hours):
+    """Collapse 7 day strings into runs: Mon-Fri 9am-5pm, Sat 10am-4pm, Sun Closed."""
+    parts, i = [], 0
+    days = [h.split(": ", 1) for h in hours]
+    while i < 7:
+        j = i
+        while j + 1 < 7 and days[j + 1][1] == days[i][1]:
+            j += 1
+        label = days[i][0] if i == j else f"{days[i][0]}-{days[j][0]}"
+        parts.append(f"{label} {days[i][1]}")
+        i = j + 1
+    return ", ".join(parts)
+
+
 def main():
     pins = json.loads(PINS.read_text())
     total_reels = len({r["url"] for p in pins for r in p["reels"]})
@@ -68,7 +91,7 @@ def main():
         if not group:
             continue
         out += [f"## {heading} ({len(group)})", "",
-                "| Place | Address | Area | Reel |", "|---|---|---|---|"]
+                "| Place | Address | Area | Hours | Reel |", "|---|---|---|---|---|"]
         for p in group:
             links = " ".join(f"[{i + 1}]({r['url']})" if len(p["reels"]) > 1
                              else f"[watch]({r['url']})"
@@ -76,7 +99,7 @@ def main():
             name = p["name"].replace("|", "\\|")
             closed = " *(closed)*" if p.get("status") == "closed" else ""
             out.append(f"| **{name}**{closed} | {tidy(p.get('address')).replace('|', '')} "
-                       f"| {area(p.get('address'))} | {links} |")
+                       f"| {area(p.get('address'))} | {hours_cell(p)} | {links} |")
         out.append("")
 
     OUT.write_text("\n".join(out))

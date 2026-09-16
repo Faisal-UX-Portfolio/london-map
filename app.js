@@ -58,32 +58,28 @@ function haversine(a, b) {
 const fmtDist = (km) => km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(km < 10 ? 1 : 0)}km`;
 
 /* ---------- opening hours ----------
-   hours[] is 7 strings, Monday-first, e.g. "Mon: 12:00-9:00 PM". We only need to know
-   whether today's line says Closed - parsing real ranges across midnight is not worth it
-   for what it adds, so "open now" means "trades today". */
-function todayLine(hours) {
-  if (!Array.isArray(hours) || hours.length < 7) return null;
-  const d = new Date().getDay();          // 0=Sun
-  return hours[d === 0 ? 6 : d - 1] || null;
-}
-function tradingToday(p) {
-  const line = todayLine(p.hours);
-  return line ? !/closed/i.test(line) : null;   // null = unknown, not false
+   hours[]       7 display strings, Monday first
+   open_ranges[] 7 lists of [startMin, endMin]; an end past 1440 runs into the next day
+   hours_text    the original source string, kept whenever hours could not be parsed */
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const todayIx = () => (new Date().getDay() + 6) % 7;   // JS weeks start Sunday
+
+function todayLine(p) {
+  return Array.isArray(p.hours) ? (p.hours[todayIx()] || null) : null;
 }
 
-/* Pins run from Uxbridge to Ilford - 29km across - but 90% of them sit inside a 10km
-   core. Fitting all of them puts the map at zoom 9, where London is a smudge between
-   Luton and Brighton. Fit the 5th-95th percentile instead: you land on central London
-   at a useful zoom and the outliers are a pan away. */
-function smartBounds(pins) {
-  if (pins.length < 12) return L.latLngBounds(pins.map((p) => [p.lat, p.lng]));
-  const at = (arr, q) => arr[Math.min(arr.length - 1, Math.floor(arr.length * q))];
-  const lats = pins.map((p) => p.lat).sort((a, b) => a - b);
-  const lngs = pins.map((p) => p.lng).sort((a, b) => a - b);
-  return L.latLngBounds(
-    [at(lats, 0.05), at(lngs, 0.05)],
-    [at(lats, 0.95), at(lngs, 0.95)]
-  );
+/* True / false / null-for-unknown. Checks the actual clock, not just whether the venue
+   trades today - "open now" that says yes at 3am would be worse than no filter at all.
+   Yesterday's ranges are re-checked because a 6pm-1am shift is still open at 00:30. */
+function openNowAt(p, now = new Date()) {
+  if (!Array.isArray(p.open_ranges)) return null;
+  if (p.status === 'closed') return false;
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const t = todayIx();
+  const inAny = (ranges, offset) =>
+    (ranges || []).some(([a, b]) => mins + offset >= a && mins + offset < b);
+  return inAny(p.open_ranges[t], 0) ||
+         inAny(p.open_ranges[(t + 6) % 7], 24 * 60);   // spilled over from yesterday
 }
 
 /* ---------- markers ---------- */
@@ -112,7 +108,7 @@ function makeIcon(p, selected, withLabel) {
 function matches(p) {
   if (filter !== 'all' && p.category !== filter) return false;
   if (!showClosed && p.status === 'closed') return false;
-  if (openNow && tradingToday(p) === false) return false;
+  if (openNow && openNowAt(p) !== true) return false;
   if (term) {
     const hay = (p.name + ' ' + (p.address || '') + ' ' +
       p.reels.map((r) => (r.caption || '') + ' ' + (r.owner || '')).join(' ')).toLowerCase();
@@ -239,7 +235,7 @@ function renderChips() {
   };
   // Only offer "Open now" if any pin actually has hours. With no enrichment data it is
   // a control that can never change the result, which is worse than no control.
-  if (PINS.some((p) => Array.isArray(p.hours))) {
+  if (PINS.some((p) => Array.isArray(p.open_ranges))) {
     toggle('chipOpen', openNow, 'Open now', () => { openNow = !openNow; refresh(); });
   }
   toggle('chipNear', sortByDistance, 'Near me', () => {
@@ -315,12 +311,46 @@ function priceBadge(p) {
 }
 function hoursBadge(p) {
   if (p.status === 'closed') return '<span class="badge permanently-closed">Permanently closed</span>';
-  const t = tradingToday(p);
-  if (t === null) return '';
-  const line = (todayLine(p.hours) || '').replace(/^\w{3}:\s*/, '');
-  return t
-    ? `<span class="badge open-now">Open today · ${esc(line)}</span>`
-    : '<span class="badge shut">Closed today</span>';
+  const open = openNowAt(p);
+  const line = (todayLine(p) || '').replace(/^\w{3}:\s*/, '');
+  if (open === true) return `<span class="badge open-now">Open now · until ${esc(closingSoon(p))}</span>`;
+  if (open === false) {
+    // "Closed" two minutes before opening is accurate but unhelpful - say when.
+    const soon = opensLaterToday(p);
+    return soon
+      ? `<span class="badge shut">Closed · opens ${esc(soon)}</span>`
+      : `<span class="badge shut">Closed${line ? ' · today ' + esc(line) : ''}</span>`;
+  }
+  // No parsed schedule. Show the raw source line rather than nothing - it is still the
+  // answer to "can I go tonight", just not machine-readable.
+  return p.hours_text ? `<span class="badge">${esc(p.hours_text)}</span>` : '';
+}
+
+function hhmm(mins) {
+  const m = ((mins % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60), mm = m % 60;
+  const h12 = h % 12 || 12;
+  return mm ? `${h12}:${String(mm).padStart(2, '0')}${h < 12 ? 'am' : 'pm'}`
+            : `${h12}${h < 12 ? 'am' : 'pm'}`;
+}
+
+function opensLaterToday(p) {
+  if (!Array.isArray(p.open_ranges)) return '';
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const next = (p.open_ranges[todayIx()] || [])
+    .map(([a]) => a).filter((a) => a > mins).sort((a, b) => a - b)[0];
+  return next == null ? '' : hhmm(next);
+}
+
+function closingSoon(p) {
+  const mins = new Date().getHours() * 60 + new Date().getMinutes();
+  const t = todayIx();
+  const all = (p.open_ranges[t] || []).concat(
+    (p.open_ranges[(t + 6) % 7] || []).map(([a, b]) => [a - 1440, b - 1440]));
+  const cur = all.find(([a, b]) => mins >= a && mins < b);
+  if (!cur) return '';
+  return hhmm(cur[1]);
 }
 
 /* The caption is the whole reason a place is on this map, and for most pins it is the
@@ -344,10 +374,11 @@ function openDetail(id) {
   const hours = Array.isArray(p.hours) ? `
     <div class="sec-label">Opening hours</div>
     <div class="hours-list">${p.hours.map((h, i) => {
-      const d = new Date().getDay(), today = (d === 0 ? 6 : d - 1) === i;
       const [day, ...rest] = h.split(':');
-      return `<div class="hours-row ${today ? 'today' : ''}"><span>${esc(day)}</span><span>${esc(rest.join(':').trim())}</span></div>`;
-    }).join('')}</div>` : '';
+      return `<div class="hours-row ${i === todayIx() ? 'today' : ''}"><span>${esc(day)}</span><span>${esc(rest.join(':').trim())}</span></div>`;
+    }).join('')}</div>` : (p.hours_text
+      ? `<div class="sec-label">Opening hours</div><div class="hours-note">${esc(p.hours_text)}</div>`
+      : '');
 
   const reels = `
     <div class="sec-label">${p.reels.length === 1 ? 'The reel' : `${p.reels.length} reels`}</div>

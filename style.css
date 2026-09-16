@@ -437,3 +437,8 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
   transition: transform 0.15s ease;
 }
 .cluster:active { transform: scale(0.93); }
+
+/* Source hours we could not parse into a schedule - shown verbatim rather than dropped. */
+.hours-note {
+  font-size: 13.5px; line-height: 1.5; color: var(--muted);
+}

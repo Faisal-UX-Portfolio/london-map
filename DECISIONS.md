@@ -299,3 +299,50 @@ the difference, so a human reads the caption. Only 4 of the 7 were genuine error
 
 One was worse than a bad name: `11-15 Minories` was at the wrong end of London entirely.
 The caption is a Lindt flagship opening at W1D 7EA; the pin sat in EC3N in the City.
+
+---
+
+## D-018 — Opening hours imported from a hand-gathered PLACES.md
+**2026-09-16 · settled**
+
+The owner had another Claude session research opening hours and return them in the Hours
+column of `PLACES.md`. `scripts/import_hours.py` parses that free text into the schema.
+
+**Three fields, not one:**
+
+| field | what it is |
+|---|---|
+| `hours` | 7 display strings, Monday first — `null` if not confidently parseable |
+| `open_ranges` | 7 lists of `[startMin, endMin]`; an end past 1440 runs into the next day |
+| `hours_text` | the original source string, **always kept** |
+
+**Why `hours_text` is always kept:** the parser is deliberately strict and refuses anything
+vague — "hours vary by day", "seasonal pop-up", "pre-order via Instagram". 19 venues land
+there. Dropping them would throw away a real answer to "can I go tonight" just because it
+is not machine-readable, so the app shows the raw line instead.
+
+**Why strict:** a venue shown as open when it is shut sends someone across London for
+nothing. A missing schedule is a minor annoyance. The parser has an assert-based selftest
+covering inherited meridiems (`12-11pm` means noon to 11pm), multiple ranges per day,
+wrapping day ranges (`Sun-Wed`), leading-closed clauses (`closed Sun`), post-midnight
+shifts, and seven inputs that must yield nothing.
+
+**"Open now" now checks the clock**, not just whether a venue trades today, and correctly
+handles the 23 venues whose shift runs past midnight — a 6pm-1am bar reads open at 00:30.
+
+Coverage: **222 of 322 with a full schedule (68%)**, 19 more as text, 241 total (74%),
+7 permanently closed. Accuracy is whatever the source research was; hours drift, especially
+for small independents.
+
+---
+
+## D-019 — Merge same-name pins within 200m
+**2026-09-16 · settled**
+
+`scripts/merge_duplicates.py`. Dedupe elsewhere keys on `place_id` (D-008), which cannot
+match a pin that has none against one that does — exactly what happened when a pin from the
+original export and a pin from geocoding described the same restaurant. 17 such pairs
+existed (339 → 322 pins), all reels preserved.
+
+Requires **both** a matching name and near-identical coordinates, so `Three Uncles` on
+Devonshire Row and `Three Uncles` on Old Bailey correctly stayed separate.

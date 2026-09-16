@@ -165,3 +165,30 @@ Recorded in `data/manual-corrections.json` with the reasoning, applied by
 
 Added **`PLACES.md`**: all 339 places grouped by category, A–Z, with address, postcode area
 and reel links. Regenerate with `python3 scripts/build_list.py`.
+
+---
+
+## 2026-09-16 — Opening hours, and duplicate pins merged
+
+**Hours are in.** Imported from the owner's researched `PLACES.md` via
+`scripts/import_hours.py`: **222 of 322 places have a full 7-day schedule (68%)**, 19 more
+carry their hours as text, 7 are marked permanently closed. 241 of 322 (74%) now show
+something.
+
+The app uses them properly:
+- **"Open now" checks the actual clock**, not just whether a venue trades today — and
+  handles the 23 venues with a post-midnight shift, so a 6pm-1am bar reads open at 00:30.
+- The detail card shows a full week with today in bold, plus a live badge: *Open now ·
+  until 11pm*, or *Closed · opens 11am* when it opens later that day.
+- Venues whose hours could not be parsed show the raw source line rather than nothing.
+
+The parser refuses anything vague ("hours vary by day", "seasonal pop-up") rather than
+guess — a venue shown open when it is shut sends someone across London for nothing.
+
+**17 duplicate pins merged** (339 → 322). These were the same venue recorded twice, once
+from the original export and once from geocoding, which `place_id` dedupe could not catch
+because only one of each pair had an id. All reels preserved; two genuinely different
+`Three Uncles` branches correctly stayed apart.
+
+`PLACES.md` regenerated with an Hours column, week runs collapsed
+(`Mon-Fri 9am-5pm, Sat 10am-4pm, Sun Closed`).
