@@ -6,7 +6,11 @@ build hit a bug where batch results were matched back to the wrong captions, pro
 pins that looked entirely plausible while linking to someone else's reel. Byte-for-byte
 comparison against data/raw-reels.json is the regression guard for that.
 """
-import json, sys, pathlib, collections
+import json, re, sys, pathlib, collections
+
+# Reels added after the original export (shared from the phone via Phase 2) will not be in
+# raw-reels.json. They are legitimate - they just cannot be caption-checked against it.
+REEL_URL = re.compile(r"^https://www\.instagram\.com/reels?/[\w-]+/?$")
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
@@ -34,6 +38,7 @@ def check():
 
     # 1. Every reel on a pin is real, and its caption is untouched.
     seen = collections.Counter()
+    added_since = 0
     for p in pins:
         want(p.get("name"), f"pin {p.get('id')} has no name")
         want(isinstance(p.get("lat"), (int, float)) and isinstance(p.get("lng"), (int, float)),
@@ -45,9 +50,13 @@ def check():
             url = reel["url"]
             seen[url] += 1
             if url not in raw:
-                failures.append(f"pin {p['name']} references unknown reel {url}")
+                # Added since the export. Cannot be caption-checked, but it must at least
+                # be a real reel link - a pin whose link goes nowhere is useless.
+                want(REEL_URL.match(url), f"pin {p['name']} has a reel url that is not an "
+                                          f"Instagram reel link: {url}")
+                added_since += 1
                 continue
-            # THE check.
+            # THE check: captions from the original export must be byte-identical.
             if reel.get("caption") != raw[url]["caption"]:
                 failures.append(f"CAPTION MISMATCH on {url} (pin {p['name']}) - "
                                 "a reel is attached to the wrong venue")
@@ -100,7 +109,8 @@ def check():
 
     print(f"OK  {len(pins)} pins · {len(seen)} reels on the map · "
           f"{len(extracted)} extracted candidates · {len(no_venue)} with no venue")
-    print(f"OK  all {len(raw)} raw reels accounted for, 0 caption mismatches")
+    print(f"OK  all {len(raw)} exported reels accounted for, 0 caption mismatches"
+          + (f" · {added_since} reel(s) added since the export" if added_since else ""))
 
 
 if __name__ == "__main__":
