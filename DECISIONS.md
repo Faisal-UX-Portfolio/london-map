@@ -235,3 +235,45 @@ the replacement.
 the only option with zero signup. If the answer is "I don't want any of ratings/hours
 badly enough to sign up for anything", OSM adds a little (websites, a few hours) and
 costs nothing.
+
+---
+
+## D-015 — Ship without ratings or opening hours; geocode only
+**2026-09-16 · settled by the owner**
+
+After D-014 measured OSM at 15% hours coverage and zero ratings, the owner chose to ship
+without enrichment rather than sign up for Google (card required) or Foursquare.
+
+**What that means:** no ratings, no review counts, no price levels, no opening hours, and
+no definitive "permanently closed" check. The "Open now" filter is hidden automatically
+while no pin has hours, so it is not a control that can never do anything.
+
+**What was still done, because it is mapping rather than enrichment:** Nominatim
+(OpenStreetMap's search service — free, no key, no card) geocodes venues onto the map.
+That delivered the explicitly-requested "more than 400": **274 → 339 places, 313 → 351
+reels mapped**, including 10 pins the original build had named after a street
+("10 Wakley St" → "Tanakatsu").
+
+The full Google Places pipeline (`scripts/places.py`, `scripts/enrich.py`) stays in the
+repo, working and tested. Adding a key later is one command.
+
+---
+
+## D-016 — Nominatim needs a query ladder, not one query
+**2026-09-16 · settled · fixed a real matching bug**
+
+`geocode.lookup()` tries, in order: `"Name, Area, London"` → `"Name, London"` → `"Name"` →
+the name with trailing words shed.
+
+**Why:** Nominatim handles "venue + area" free text badly. `"Dishoom Shoreditch, London"`
+returns **zero** results; `"Dishoom, London"` returns five. This was silently costing
+matches — 61 of 124 candidates came back empty on the first pass, and the ladder recovered
+21 more pins from exactly those.
+
+Results are always scored against the **full** original name, so a shortened query cannot
+quietly match an unrelated venue — "Nonsense Venue Xyzzy" still rejects.
+
+Three scoring flaws were fixed at the same time, all of which rejected correct matches:
+accents were mangled (`Gökyüzü` scored 0.58 against `Gokyuzu`), length differences were
+punished (`JOIA` vs `JOIA Restaurant, Bar & Rooftop` scored 0.33), and branches of one
+chain were treated as ambiguity (every `Kricket` in London).

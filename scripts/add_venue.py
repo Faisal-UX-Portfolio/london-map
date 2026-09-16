@@ -41,7 +41,8 @@ def main():
             "owner": None}
 
     try:
-        rows = geocode.nominatim(f"{name}, London")
+        rows, used = geocode.lookup(name)
+        print(f"matched on query: {used!r}")
     except Exception as e:
         print(f"::warning::lookup failed for {name!r}: {type(e).__name__}: {e}")
         rows = []

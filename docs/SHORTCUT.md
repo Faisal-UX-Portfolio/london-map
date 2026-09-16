@@ -88,8 +88,11 @@ that file to see what it found. Fixing it is usually a matter of adding the venu
 with a better name.
 
 **The pin is in the wrong place.** Chains are the usual cause — several branches share a
-name and it picked the wrong one. Include the area when you type: `Kricket Soho` rather than
-`Kricket`.
+name and it picked the wrong one. You can try including the area (`Kricket Soho`), but be
+aware the geocoder often does *worse* with an area appended: "Dishoom Shoreditch" finds
+nothing while "Dishoom" finds five. The lookup retries without the area automatically, so
+the simplest name usually works best. For a specific branch it is quicker to correct the
+pin by hand in `pins.json`.
 
 ## About the token on your phone
 

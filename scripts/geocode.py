@@ -60,6 +60,34 @@ def nominatim(query, bounded=True, timeout=20):
         return json.loads(r.read())
 
 
+def lookup(name, area_hint=None):
+    """Try progressively looser queries and return the first that finds anything.
+
+    Nominatim does poorly with "Venue Area, London" free text - "Dishoom Shoreditch,
+    London" returns ZERO results while "Dishoom, London" returns five. The area hint helps
+    when it is a real place name and actively hurts when it is not, so try it first and
+    fall back rather than trusting it.
+    """
+    queries = []
+    if area_hint:
+        queries.append(f"{name}, {area_hint}, London")
+    queries.append(f"{name}, London")
+    queries.append(name)
+    # The area is often typed into the name itself ("Dishoom Shoreditch"), which Nominatim
+    # cannot parse either. Shed trailing words as a last resort. Only reached when
+    # everything above found nothing, and the result is still scored against the FULL
+    # name, so a shortened query cannot quietly match an unrelated venue.
+    words = name.split()
+    for drop in (1, 2):
+        if len(words) > drop:
+            queries.append(f"{' '.join(words[:-drop])}, London")
+    for q in queries:
+        rows = nominatim(q)
+        if to_google_shape(rows):
+            return rows, q
+    return [], queries[-1]
+
+
 def to_google_shape(rows):
     """Adapt Nominatim rows to the shape places.decide() already understands, so the
     scoring rules (and their tests) are shared rather than reimplemented."""
@@ -139,6 +167,7 @@ def build_worklist(pins, extracted):
         q = f"{v['candidate_name']}, {v['area_hint']}, London" if v.get("area_hint") \
             else f"{v['candidate_name']}, London"
         work.append({"kind": "candidate", "name": v["candidate_name"], "query": q, "ll": None,
+                     "area_hint": v.get("area_hint"),
                      "reel": {"url": v["reel_url"], "caption": v["caption"], "owner": v.get("owner")},
                      "dup": key in seen})
         seen.add(key)
@@ -174,7 +203,11 @@ def main():
         if args.limit and n >= args.limit:
             break
         try:
-            cache[w["query"]] = nominatim(w["query"])
+            if w["kind"] == "candidate":
+                rows, _ = lookup(w["name"], w.get("area_hint"))
+            else:
+                rows = nominatim(w["query"])
+            cache[w["query"]] = rows
         except urllib.error.HTTPError as e:
             print(f"  Nominatim HTTP {e.code} on {w['query']!r} - stopping, {n} fetched")
             break
