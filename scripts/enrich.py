@@ -120,6 +120,11 @@ def main():
             print(f"stopped after {calls} call(s); {len(cache)} cached results kept")
             CACHE.write_text(json.dumps(cache))
             sys.exit(1)
+        except urllib.error.URLError as e:
+            print(f"\nOverpass unreachable on {w['query']!r}: {e.reason}")
+            print(f"stopped after {calls} call(s); {len(cache)} cached results kept")
+            CACHE.write_text(json.dumps(cache))
+            sys.exit(1)
         calls += 1
         cache[k] = {"query": w["query"], "results": res, "at": int(time.time())}
         if calls % 10 == 0:

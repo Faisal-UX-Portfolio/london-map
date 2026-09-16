@@ -17,8 +17,16 @@ import json, re, difflib, time, urllib.request, urllib.error, urllib.parse
 
 import places  # reuse decide/normalize/haversine_km/looks_like_address/disp
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-USER_AGENT = "LondonReelsMap/1.0 (personal hobby project; contact faisal.ahmed@createfuture.com)"
+# overpass-api.de is the canonical instance and stays first choice; the second is a public
+# mirror to fall back on when the main one is rate-limiting or unreachable - still free,
+# still no key, same query language. Either can be flaky since it's a shared free service.
+OVERPASS_URLS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.openstreetmap.fr/api/interpreter",
+]
+# Overpass asks clients to identify themselves. A repo URL does that without putting
+# a personal email into every request to a third-party service.
+USER_AGENT = "LondonReelsMap/1.0 (+https://github.com/Faisal-UX-Portfolio/london-map)"
 MIN_INTERVAL_S = 1.0          # be a good citizen on a free shared service
 MAX_CANDIDATES = 200          # cap how many decide() has to score per lookup
 
@@ -34,23 +42,32 @@ def _throttle():
 
 
 def _post(query, timeout, retries):
+    """Try each mirror in turn; within a mirror, back off and retry on 429/504."""
     body = urllib.parse.urlencode({"data": query}).encode()
-    req = urllib.request.Request(OVERPASS_URL, data=body, method="POST",
-                                  headers={"User-Agent": USER_AGENT,
-                                           "Content-Type": "application/x-www-form-urlencoded"})
-    for attempt in range(retries):
-        _throttle()
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return json.loads(r.read())
-        except urllib.error.HTTPError as e:
-            if e.code in (429, 504) and attempt < retries - 1:
-                backoff = 5 * (attempt + 1)
-                print(f"    overpass HTTP {e.code}, backing off {backoff}s...")
-                time.sleep(backoff)
-                continue
-            raise
-    raise RuntimeError("overpass: exhausted retries")  # pragma: no cover
+    last_err = RuntimeError("overpass: no mirrors configured")
+    for url in OVERPASS_URLS:
+        host = url.split("/")[2]
+        req = urllib.request.Request(url, data=body, method="POST",
+                                      headers={"User-Agent": USER_AGENT,
+                                               "Content-Type": "application/x-www-form-urlencoded"})
+        for attempt in range(retries):
+            _throttle()
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as r:
+                    return json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                last_err = e
+                if e.code in (429, 504) and attempt < retries - 1:
+                    backoff = 5 * (attempt + 1)
+                    print(f"    {host} HTTP {e.code}, backing off {backoff}s...")
+                    time.sleep(backoff)
+                    continue
+                break  # not retryable, or out of attempts - try the next mirror
+            except urllib.error.URLError as e:
+                last_err = e
+                print(f"    {host} unreachable ({e.reason}), trying next mirror...")
+                break
+    raise last_err
 
 
 def _to_candidate(el):
@@ -94,9 +111,9 @@ def search(query_name, lat, lng, radius_m=500, timeout=30, retries=5):
 
 _DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
 _FULL = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-_DAY_TOKEN = "|".join(_DAYS)
+_DAY_TOKEN = "|".join(_DAYS) + "|PH"       # PH (public holiday) is dropped, not rejected
 _SEG_RE = re.compile(
-    rf'^((?:(?:{_DAY_TOKEN})(?:-(?:{_DAY_TOKEN}))?)(?:,(?:(?:{_DAY_TOKEN})(?:-(?:{_DAY_TOKEN}))?))*)'
+    rf'^((?:(?:{_DAY_TOKEN})(?:-(?:{_DAY_TOKEN}))?)(?:,\s*(?:(?:{_DAY_TOKEN})(?:-(?:{_DAY_TOKEN}))?))*)'
     rf'\s+(.+)$')
 _TIME_RE = re.compile(r'^([0-2]\d:[0-5]\d)-([0-2]\d:[0-5]\d)$')
 _UNSUPPORTED_RE = re.compile(
@@ -105,17 +122,23 @@ _UNSUPPORTED_RE = re.compile(
 
 
 def _expand_days(days_part):
+    """Mo..Su tokens/ranges, comma-separated (optional space after the comma). A day range
+    wraps across the week boundary the way the OSM spec defines it - "Fr-Mo" is Fri,Sat,
+    Sun,Mon, not an error. Bare "PH" (public holiday) entries are dropped, not rejected."""
     days = []
-    for group in days_part.split(","):
+    for group in (g.strip() for g in days_part.split(",")):
+        if group == "PH":
+            continue
         if "-" in group:
             a, b = group.split("-")
-            if a not in _DAYS or b not in _DAYS or _DAYS.index(a) > _DAYS.index(b):
-                return None  # unknown token, or a wrap-around range ("Fr-Mo") - too risky
-            days.extend(_DAYS[_DAYS.index(a):_DAYS.index(b) + 1])
-        else:
-            if group not in _DAYS:
+            if a not in _DAYS or b not in _DAYS:
                 return None
+            ia, ib = _DAYS.index(a), _DAYS.index(b)
+            days.extend(_DAYS[ia:ib + 1] if ia <= ib else _DAYS[ia:] + _DAYS[:ib + 1])
+        elif group in _DAYS:
             days.append(group)
+        else:
+            return None
     return days
 
 
@@ -242,6 +265,19 @@ def _selftest():
     r = poh("Mo-Fr 09:00-17:00; PH off")
     assert r[0] == "Mon: 09:00-17:00" and r[5] == "Sat: Closed"
 
+    # a day range wraps across the week boundary the way the OSM spec defines it
+    r = poh("Fr-Mo 09:00-17:00")
+    assert r[4] == "Fri: 09:00-17:00" and r[6] == "Sun: 09:00-17:00" and r[0] == "Mon: 09:00-17:00"
+    assert r[1] == "Tue: Closed" and r[2] == "Wed: Closed" and r[3] == "Thu: Closed"
+
+    # PH (public holiday) is dropped wherever it appears, never treated as an unknown day
+    r = poh("Mo-Su,PH 10:00-22:00")
+    assert all(":" in x and "Closed" not in x for x in r)
+
+    # a space after the comma in a day list is common in the wild and must still parse
+    r = poh("Mo 13:00-22:00; Tu-Th, Su 12:00-22:00; Fr, Sa 12:00-23:00")
+    assert r[0] == "Mon: 13:00-22:00" and r[6] == "Sun: 12:00-22:00" and r[4] == "Fri: 12:00-23:00"
+
     # malformed / unsupported -> None, never a guess
     assert poh(None) is None
     assert poh("") is None
@@ -250,7 +286,6 @@ def _selftest():
     assert poh("week 1-3 Mo-Fr 09:00-17:00") is None
     assert poh('Mo-Fr 09:00-17:00 "by appointment"') is None
     assert poh("banana") is None
-    assert poh("Fr-Mo 09:00-17:00") is None  # wrap-around range, deliberately not supported
 
     # pin schema mapping
     node = {"osm_type": "node", "osm_id": 123, "tags": {

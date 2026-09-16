@@ -197,3 +197,41 @@ creator. **When genuinely ambiguous, extract it** — confidence scoring filters
 candidate later, but a missed venue is gone for good.
 
 Recovered 9 venues across 8 reels.
+
+---
+
+## D-014 — OpenStreetMap measured: 15% hours coverage, 0% ratings
+**2026-09-16 · measured, pending a call**
+
+Built the full OSM/Overpass provider (`scripts/osm.py`) and ran **48 live lookups** to
+measure coverage before committing to all 385. Results:
+
+| | |
+|---|---|
+| Venues matched | 24 of 48 (**50%**) |
+| …of those, with opening hours | 7 of 24 (**29%**) |
+| **End to end: venues that gain hours** | **7 of 48 ≈ 15%** |
+| Ratings | **0** — OSM has no ratings, structurally |
+| Website / phone | 10 / 5 of 24 |
+
+Worse, OSM actively degraded the address-named pins. Asked to resolve "85 Old Brompton
+Road" it returned the *street* — 4 of 5 renames were wrong:
+
+```
+10 Wakley St      -> Wakley's          (it is actually Tanakatsu)
+10A Gee's Court   -> Gee's Court       (a street)
+85 Old Brompton Rd-> Old Brompton Road (a street)
+```
+
+`pins.json` was reverted; the query cache was kept so nothing is re-fetched if we return
+to this. The code is sound and the `opening_hours` parser is well tested — the data simply
+isn't there. London independents largely don't maintain OSM hours, and no amount of
+client-side work changes that.
+
+**This supersedes the OSM choice on evidence, not preference.** Left to the owner to pick
+the replacement.
+
+**What's genuinely fine about OSM:** it needs no key, no card and no account, and it is
+the only option with zero signup. If the answer is "I don't want any of ratings/hours
+badly enough to sign up for anything", OSM adds a little (websites, a few hours) and
+costs nothing.
