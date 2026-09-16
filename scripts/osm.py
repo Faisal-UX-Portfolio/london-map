@@ -67,7 +67,7 @@ def _to_candidate(el):
     }
 
 
-def search(query_name, lat, lng, radius_m=500, timeout=30, retries=3):
+def search(query_name, lat, lng, radius_m=500, timeout=30, retries=5):
     """Nodes/ways/relations named anything, within radius_m of (lat, lng).
 
     query_name isn't sent to Overpass (no trustworthy text search there) - it's used only

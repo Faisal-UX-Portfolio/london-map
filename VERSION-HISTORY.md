@@ -98,3 +98,16 @@ a stale detail card now swaps to results when a search excludes it.
 
 **The service worker is no longer registered on localhost.** It served stale JavaScript
 twice during development and cost real debugging time.
+
+---
+
+## 2026-09-16 — Step 4: live on GitHub Pages
+
+Repo: https://github.com/Faisal-UX-Portfolio/london-map (public, `main`)
+Live: https://faisal-ux-portfolio.github.io/london-map/
+
+Verified the deployed site over HTTPS at iPhone viewport — map, clustering, filters and
+bottom chrome all render correctly. HTTPS is what makes geolocation possible at all; iOS
+blocks it on `file://`, which is why hosting was never optional.
+
+Added `docs/PHONE-SETUP.md` for home-screen install and location permissions.
