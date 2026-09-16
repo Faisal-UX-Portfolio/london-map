@@ -201,7 +201,9 @@ function renderMarkers() {
 /* ---------- chrome ---------- */
 function renderCount() {
   const n = visible().length;
-  const reels = PINS.reduce((s, p) => s + p.reels.length, 0);
+  // Count DISTINCT reels: one listicle reel can sit on several pins, and summing
+  // reels-per-pin overstates the total.
+  const reels = new Set(PINS.flatMap((p) => p.reels.map((r) => r.url))).size;
   $('count').textContent = n === PINS.length
     ? `${PINS.length} places · ${reels} reels`
     : `${n} of ${PINS.length}`;

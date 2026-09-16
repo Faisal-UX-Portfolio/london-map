@@ -1,0 +1,58 @@
+name: Add venue from shared reel
+
+# repository_dispatch only, deliberately. A push trigger would be re-fired by this
+# workflow's own commit, and guarding that needs a [skip ci] convention that is easy to
+# get wrong. A dispatch event cannot be satisfied by a git push, so there is no loop.
+on:
+  repository_dispatch:
+    types: [new-venue]
+  workflow_dispatch:
+    inputs:
+      name:
+        description: Venue name
+        required: true
+      url:
+        description: Instagram reel URL
+        required: true
+
+permissions:
+  contents: write
+
+# Two shares in quick succession queue instead of racing each other. Never cancel a
+# queued run - that would silently drop a venue.
+concurrency:
+  group: add-venue
+  cancel-in-progress: false
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add the venue
+        env:
+          VENUE_NAME: ${{ github.event.client_payload.venue_name || inputs.name }}
+          REEL_URL: ${{ github.event.client_payload.reel_url || inputs.url }}
+          NOTE: ${{ github.event.client_payload.note }}
+        run: |
+          python3 scripts/add_venue.py --name "$VENUE_NAME" --url "$REEL_URL" --note "$NOTE"
+
+      - name: Check integrity before committing
+        run: python3 scripts/selfcheck.py
+
+      - name: Commit
+        env:
+          VENUE_NAME: ${{ github.event.client_payload.venue_name || inputs.name }}
+        run: |
+          git config user.name "london-map-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pins.json data/needs-review.json
+          if git diff --staged --quiet; then
+            echo "nothing changed"
+            exit 0
+          fi
+          git commit -m "Add venue: $VENUE_NAME"
+          # Another run may have landed while this one worked; rebase rather than fail.
+          git pull --rebase --autostash origin main
+          git push
