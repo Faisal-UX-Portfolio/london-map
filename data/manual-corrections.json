@@ -1,0 +1,25 @@
+[
+ {
+  "match_name": "10A Gee's Court",
+  "name": "Cup+Lid",
+  "why": "Caption credits @cuppluslid. OSM has 'Cup+Lid' at 10 Gee's Court, 51.51475,-0.15012 - within 3m of the existing pin, so the location was already right and only the name was wrong."
+ },
+ {
+  "match_name": "11-15 Minories",
+  "name": "Lindt",
+  "lat": 51.51032,
+  "lng": -0.13446,
+  "address": "Lindt, 14 Shaftesbury Avenue, London W1D 7EA",
+  "why": "Caption is the Lindt flagship opening and states postcode W1D 7EA. The pin sat at 11-15 Minories EC3N in the City - the wrong end of London entirely, not just a wrong name. OSM confirms Lindt at 14 Shaftesbury Avenue."
+ },
+ {
+  "match_name": "113 KTV",
+  "name": "113 Korean Kitchen & Karaoke",
+  "why": "Caption names it outright: 'This is 113 Korean Kitchen & Karaoke', handle @113ktv. Not in OSM, so the existing coordinates (113 Hampstead Rd NW1 3EE, from the caption) are kept."
+ },
+ {
+  "match_name": "278 Uxbridge Rd",
+  "name": "Chipsy",
+  "why": "Caption credits @chipsy_uk as the venue. Not in OSM, so the existing coordinates (278 Uxbridge Rd, Pinner HA5 4HS, from the caption) are kept."
+ }
+]

@@ -277,3 +277,25 @@ Three scoring flaws were fixed at the same time, all of which rejected correct m
 accents were mangled (`Gökyüzü` scored 0.58 against `Gokyuzu`), length differences were
 punished (`JOIA` vs `JOIA Restaurant, Bar & Rooftop` scored 0.33), and branches of one
 chain were treated as ambiguity (every `Kricket` in London).
+
+---
+
+## D-017 — Hand-verified fixes live in a corrections file, not typed into pins.json
+**2026-09-16 · settled**
+
+`data/manual-corrections.json` records each fix with the evidence for it;
+`scripts/apply_corrections.py` applies them idempotently.
+
+**Why:** some venues cannot be resolved automatically — they are absent from OSM, or the
+original geocoding landed on a street. Editing `pins.json` directly would lose the
+reasoning and be silently undone by a pipeline re-run. A corrections file is reviewable,
+re-appliable, and states *why* each change was made.
+
+**Why not simply rename every street-shaped name:** four of the seven flagged pins turned
+out to be **real trading names** — `1947 London`, `64 Old Compton Street`,
+`113 Korean Kitchen & Karaoke` and `221B Baker Street` are what those businesses are
+actually called. The heuristic that finds them ("name starts with a number") cannot tell
+the difference, so a human reads the caption. Only 4 of the 7 were genuine errors.
+
+One was worse than a bad name: `11-15 Minories` was at the wrong end of London entirely.
+The caption is a Lindt flagship opening at W1D 7EA; the pin sat in EC3N in the City.

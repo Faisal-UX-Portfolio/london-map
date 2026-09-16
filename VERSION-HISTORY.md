@@ -144,3 +144,24 @@ The end-to-end test earned its keep: `selfcheck.py` required every reel to exist
 original export, so it would have **failed on every genuinely new venue** — blocking the
 entire automation. Post-export reels are now validated as Instagram links instead, while
 the byte-identical caption check still applies to everything from the export.
+
+---
+
+## 2026-09-16 — Street-named pins resolved, and PLACES.md
+
+Read the captions behind all seven pins still named after a street. **Four were genuine
+errors, three were not** — `1947 London`, `64 Old Compton Street` and `221B Baker Street`
+are the businesses' real names, and `113 Korean Kitchen & Karaoke` is too once renamed.
+
+| Was | Now | Evidence |
+|---|---|---|
+| 10A Gee's Court | **Cup+Lid** | Caption credits `@cuppluslid`; OSM confirms it 3m away |
+| 11-15 Minories | **Lindt** | Caption is the Lindt flagship at W1D 7EA — the pin was in EC3N, the wrong end of London |
+| 113 KTV | **113 Korean Kitchen & Karaoke** | Caption names it outright |
+| 278 Uxbridge Rd | **Chipsy** | Caption credits `@chipsy_uk` |
+
+Recorded in `data/manual-corrections.json` with the reasoning, applied by
+`scripts/apply_corrections.py` (idempotent) — see D-017.
+
+Added **`PLACES.md`**: all 339 places grouped by category, A–Z, with address, postcode area
+and reel links. Regenerate with `python3 scripts/build_list.py`.
