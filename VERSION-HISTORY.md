@@ -111,3 +111,36 @@ bottom chrome all render correctly. HTTPS is what makes geolocation possible at 
 blocks it on `file://`, which is why hosting was never optional.
 
 Added `docs/PHONE-SETUP.md` for home-screen install and location permissions.
+
+---
+
+## 2026-09-16 — Geocoding and Phase 2 automation
+
+**Enrichment dropped, mapping kept.** After OSM measured at 15% hours coverage (D-014), the
+owner chose to ship without ratings or hours (D-015). Nominatim was still used for
+geocoding, because putting the listicle venues on the map was a separate requirement:
+
+| | Before | After |
+|---|---|---|
+| Places | 274 | **339** |
+| Reels mapped | 313 | **351** of 414 |
+| Pins named after a street | 16 | 7 |
+
+10 pins gained real names — `10 Wakley St` → `Tanakatsu`, `81 Great Eastern St` →
+`Hoxton Grill`, `332 Portobello Rd` → `Layla bakery`.
+
+**Four matching bugs fixed**, each silently rejecting correct venues: accents were mangled
+(`Gökyüzü` vs `Gokyuzu` scored 0.58), length differences were punished (`JOIA` vs
+`JOIA Restaurant, Bar & Rooftop` scored 0.33), chain branches were treated as ambiguity
+(every `Kricket` in London), and distance diluted scores for candidates that had no
+coordinates to measure. Plus D-016: Nominatim returns nothing for `Dishoom Shoreditch,
+London` but five results for `Dishoom, London`, so lookups now walk a ladder of
+progressively looser queries — that alone recovered 21 pins.
+
+**Phase 2 shipped and tested end to end.** Share sheet → Shortcut → `repository_dispatch` →
+GitHub Action geocodes and commits → Pages rebuilds. Verified by a real workflow run.
+
+The end-to-end test earned its keep: `selfcheck.py` required every reel to exist in the
+original export, so it would have **failed on every genuinely new venue** — blocking the
+entire automation. Post-export reels are now validated as Instagram links instead, while
+the byte-identical caption check still applies to everything from the export.
