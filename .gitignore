@@ -3,3 +3,4 @@ _handoff/
 *.pyc
 __pycache__/
 .env
+data/batches-v1/
