@@ -17,8 +17,8 @@
 
   /* Ink */
   --text: #000000;
-  --muted: rgba(60, 60, 67, 0.6);
-  --muted-2: rgba(60, 60, 67, 0.42);
+  --muted: rgba(60, 60, 67, 0.74);
+  --muted-2: rgba(60, 60, 67, 0.62);
 
   /* Accent - true iOS system colours. Orange was tried for food and reverted: it
      clashed with systemBlue, which every interactive element uses. */
@@ -97,32 +97,43 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
   filter: saturate(0.6) brightness(0.78) invert(0.92) hue-rotate(180deg) contrast(0.95);
 }
 
-/* ---------- top chrome ---------- */
+/* ---------- chrome ----------
+   Search and filters live at the BOTTOM. Apple's own guidance puts search there when
+   there is no bottom toolbar, and this app is used one-handed on the street - the two
+   controls you touch most were the only ones out of thumb reach.
+   Both bars sit above the sheet (z 60) so a filter is never unreachable behind a card. */
 .chrome-top {
-  position: absolute; z-index: 30;
+  position: absolute; z-index: 60;
   top: 0; left: 0; right: 0;
   padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-left))
            0 max(12px, env(safe-area-inset-right));
   pointer-events: none;
 }
-.chrome-top > * { pointer-events: auto; }
+.wordmark-pill {
+  display: inline-flex; align-items: baseline; gap: 9px;
+  border-radius: 16px; padding: 7px 13px;
+  pointer-events: auto;
+}
+.wordmark { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+.wordmark em { font-style: normal; color: var(--spark); }
+.count { font-size: 11.5px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-/* Header and search are ONE glass surface, not two stacked - stacked translucency
-   reads muddy, which is Apple's own guidance. */
-.header-card {
-  --r: 22px;
-  --pad: 10px;
+.chrome-bottom {
+  position: absolute; z-index: 60;
+  left: 0; right: 0; bottom: 0;
+  padding: 0 max(12px, env(safe-area-inset-left))
+           max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-right));
+  pointer-events: none;
+}
+.chrome-bottom > * { pointer-events: auto; }
+
+.search-card {
+  --r: 20px;
+  --pad: 6px;
   border-radius: var(--r);
   padding: var(--pad);
+  margin-top: 9px;
 }
-
-.header-row {
-  display: flex; align-items: baseline; gap: 8px;
-  padding: 4px 8px 9px;
-}
-.wordmark { font-size: 19px; font-weight: 700; letter-spacing: -0.4px; }
-.wordmark em { font-style: normal; color: var(--spark); }
-.count { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* Concentric radius: parent radius minus parent padding. Not an arbitrary number. */
 .search-row {
@@ -130,7 +141,7 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
   background: var(--fill);
   border-radius: calc(var(--r) - var(--pad));
   padding: 0 10px;
-  height: 38px;
+  height: 40px;
 }
 .search-row svg { flex: none; color: var(--muted); }
 #searchInput {
@@ -143,8 +154,16 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
    on top of ours. Hide theirs, keep ours. */
 #searchInput::-webkit-search-cancel-button,
 #searchInput::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+.search-row:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--spark) 38%, transparent);
+}
+.chip:focus-visible, .rail-btn:focus-visible, .btn:focus-visible,
+.res-item:focus-visible, .reel-card:focus-visible, .clear-btn:focus-visible {
+  outline: 2.5px solid var(--spark);
+  outline-offset: 2px;
+}
 .clear-btn {
-  flex: none; width: 20px; height: 20px; border-radius: 50%;
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
   display: none; place-items: center;
   background: var(--fill-strong); color: var(--muted);
 }
@@ -152,7 +171,7 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
 
 /* ---------- filter chips ---------- */
 .chip-row {
-  display: flex; gap: 7px; margin-top: 9px;
+  display: flex; gap: 7px;
   overflow-x: auto; scrollbar-width: none;
   padding-bottom: 2px;
   -webkit-overflow-scrolling: touch;
@@ -185,10 +204,13 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
    does with its compass and location controls. */
 .side-rail {
   position: absolute; z-index: 25;
+  transition: opacity 0.2s ease;
   right: max(12px, env(safe-area-inset-right));
-  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 84px);
+  bottom: calc(var(--chrome-h, 104px) + 12px);
   display: flex; flex-direction: column; gap: 10px;
 }
+#app.panel-open .side-rail { opacity: 0; pointer-events: none; }
+
 .rail-btn {
   width: 44px; height: 44px; border-radius: 50%;
   display: grid; place-items: center;
@@ -247,15 +269,17 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
 
 .sheet {
   position: absolute; z-index: 50;
-  left: 0; right: 0; bottom: 0;
-  max-height: 86dvh;
-  border-radius: 26px 26px 0 0;
-  transform: translateY(101%);
+  left: 0; right: 0; bottom: var(--chrome-h, 104px);
+  max-height: calc(88dvh - var(--chrome-h, 104px));
+  border-radius: 26px 26px 26px 26px;
+  margin: 0 8px;
+  transform: translateY(calc(101% + var(--chrome-h, 104px)));
   transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
   display: flex; flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom);
 }
 .sheet.open { transform: translateY(0); }
+.sheet { will-change: transform; touch-action: pan-y; }
 
 .sheet-grip {
   flex: none; width: 36px; height: 5px; border-radius: 3px;
@@ -272,6 +296,13 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
 }
 .v-name { font-size: 21px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.2; }
 .v-sub { font-size: 13.5px; color: var(--muted); margin-top: 3px; }
+
+.v-hook {
+  font-size: 14px; line-height: 1.45; margin-top: 11px;
+  color: var(--text);
+  padding-left: 11px;
+  border-left: 3px solid var(--spark);
+}
 
 .v-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 11px; }
 .badge {
@@ -357,7 +388,7 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
 .empty-sub { font-size: 13.5px; line-height: 1.45; }
 
 .toast {
-  position: absolute; z-index: 60;
+  position: absolute; z-index: 70;
   left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 24px);
   transform: translate(-50%, 14px);
   padding: 9px 15px; border-radius: 13px;
@@ -372,20 +403,37 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
-/* Wide screens: the sheet becomes a left-hand panel, like Apple Maps on iPad. */
+/* Wide screens: the sheet becomes a left-hand panel, like Apple Maps on iPad, and the
+   bottom bar tucks in beside it. */
 @media (min-width: 840px) {
-  .chrome-top { max-width: 400px; }
+  .chrome-bottom { max-width: 420px; }
   .sheet {
     right: auto; top: 0; bottom: 0;
-    width: 400px;
+    width: 420px;
     max-height: none;
     border-radius: 0;
+    margin: 0;
     transform: translateX(-101%);
     padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: calc(var(--chrome-h, 104px) + env(safe-area-inset-bottom));
   }
   .sheet.open { transform: translateX(0); }
   .sheet-grip { display: none; }
-  .chrome-top { left: 0; transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1); }
-  #app.panel-open .chrome-top { transform: translateX(400px); }
+  .side-rail { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 12px); }
+  /* The panel is on the left here, so the right-hand rail is never underneath it. */
+  #app.panel-open .side-rail { opacity: 1; pointer-events: auto; }
   .scrim { display: none; }
 }
+
+/* Cluster bubble, shown only below the zoom where pin labels appear. */
+.cluster {
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--c) 88%, transparent);
+  color: #fff;
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s ease;
+}
+.cluster:active { transform: scale(0.93); }

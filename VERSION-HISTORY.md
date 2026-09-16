@@ -62,3 +62,39 @@ counts. Re-running all five batches after the fixes took the yield from 102 venu
 
 Agents correctly excluded out-of-London content: Manchester, Portsmouth, Edinburgh, Los
 Angeles and Tempe AZ.
+
+---
+
+## 2026-09-16 — QA and UX review fixes
+
+Two review subagents ran against the live app. Their findings, applied:
+
+**Blocking bug (QA):** the scrim covered the header, filter chips and side rail, so on any
+phone-width screen you could not search, change a filter or toggle the theme while a place
+card was open — the tap closed the card instead. Header and bottom bar now sit above the
+scrim and sheet (z-index 60), verified with `elementFromPoint`.
+
+**Search and filters moved to the bottom of the screen (UX).** Apple's guidance puts search
+at the bottom when there is no bottom toolbar, and this app is used one-handed on the
+street — the two most-touched controls were the only ones out of thumb reach. The sheet now
+opens *above* the bottom bar (`--chrome-h`, measured at runtime) so the controls are never
+covered. The wordmark became a small non-interactive top pill.
+
+**Clustering below zoom 15.** 150+ overlapping unlabelled teardrops was the first thing you
+saw. Pins now cluster into count bubbles below the zoom where labels appear — above it, the
+custom teardrop pins render exactly as before, so the pin design is untouched at every zoom
+where it was ever legible. A 66px pixel grid, no library.
+
+**Light-mode contrast.** `--muted` measured 3.44:1 and `--muted-2` 2.23:1 over a light
+backing, under the 4.5:1 and 3:1 minimums. Raised to 5.00:1 and 3.63:1 (verified by
+computation, not by eye). Dark mode already passed and was left alone.
+
+Also: swipe-to-dismiss on the sheet (the grabber previously promised a gesture that did not
+exist), `safeUrl()` scheme allowlist on every href (`esc()` escapes text but does nothing to
+`javascript:`), visible keyboard focus rings, honest `aria-modal` plus focus restore, a
+28px clear button (was 20px, under the tap-target minimum), panel-aware map panning on wide
+screens, the reel caption surfaced above the fold as the reason a place is on the map, and
+a stale detail card now swaps to results when a search excludes it.
+
+**The service worker is no longer registered on localhost.** It served stale JavaScript
+twice during development and cost real debugging time.

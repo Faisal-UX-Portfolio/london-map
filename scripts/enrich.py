@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Enrich pins.json from Google Places, and geocode the venues extracted from listicles.
+"""Enrich pins.json from OpenStreetMap (Overpass API), and geocode the venues extracted
+from listicles.
 
   python3 scripts/enrich.py --dry-run        # show the worklist and queries, spend nothing
   python3 scripts/enrich.py --limit 50       # the budget guard: stop and report after 50
@@ -7,11 +8,14 @@
 
 Idempotent: every API response is cached in data/cache.json keyed by the exact query, so
 re-running only pays for venues it has not seen. Delete a cache entry to force a refresh.
+No API key, no signup, no credit card - Overpass is a free shared service, so this also
+throttles itself to be a good citizen (see scripts/osm.py).
 """
 import argparse, hashlib, json, pathlib, sys, time, urllib.error
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import places
+import osm
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
@@ -50,11 +54,11 @@ def qkey(q, lat, lng):
                         .encode()).hexdigest()[:16]
 
 
-def build_worklist(pins, extracted, refresh_all):
+def build_worklist(pins, extracted):
     """Existing pins that still lack data, plus every extracted candidate."""
     work = []
     for p in pins:
-        needs = refresh_all or p.get("place_id") is None or p.get("rating") is None
+        needs = p.get("place_id") is None or p.get("hours") is None
         if not needs:
             continue
         addressy = places.looks_like_address(p["name"])
@@ -78,14 +82,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="stop after N API calls (0 = no cap)")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--refresh-all", action="store_true",
-                    help="re-query pins that already have data")
     args = ap.parse_args()
 
     pins = load(PINS, [])
     extracted = load(DATA / "extracted-venues.json", [])
     cache = load(CACHE, {})
-    work = build_worklist(pins, extracted, args.refresh_all)
+    work = build_worklist(pins, extracted)
 
     uncached = [w for w in work if qkey(w["query"], w["lat"], w["lng"]) not in cache]
     print(f"worklist: {len(work)} venues ({sum(1 for w in work if w['kind']=='pin')} existing pins, "
@@ -110,8 +112,8 @@ def main():
         if args.limit and calls >= args.limit:
             break
         try:
-            res = places.search(w["query"], w["lat"], w["lng"],
-                                radius_m=400 if w["trusted_coords"] else 6000)
+            res = osm.search(w["query"], w["lat"], w["lng"],
+                             radius_m=400 if w["trusted_coords"] else 6000)
         except urllib.error.HTTPError as e:
             body = e.read().decode()[:300]
             print(f"\nAPI error {e.code} on {w['query']!r}:\n  {body}")
@@ -120,7 +122,8 @@ def main():
             sys.exit(1)
         calls += 1
         cache[k] = {"query": w["query"], "results": res, "at": int(time.time())}
-        time.sleep(0.05)
+        if calls % 10 == 0:
+            print(f"  ... {calls}/{len(uncached)} looked up")
 
     CACHE.write_text(json.dumps(cache))
     print(f"\n{calls} API call(s) made; cache now holds {len(cache)} queries")
@@ -155,7 +158,7 @@ def apply_results(pins, work, cache):
                 "candidate_name": w["name"], "query": w["query"], "kind": w["kind"],
                 "reel": w.get("reel"),
                 "options": [{"name": places.disp(s["cand"]),
-                             "address": s["cand"].get("formattedAddress"),
+                             "address": osm.to_pin_fields(s["cand"])["address"],
                              "combined": round(s["combined"], 3),
                              "name_sim": round(s["name_sim"], 3),
                              "dist_km": None if s["dist_km"] is None else round(s["dist_km"], 2)}
@@ -164,7 +167,7 @@ def apply_results(pins, work, cache):
             continue
 
         stats["accepted"] += 1
-        f = places.to_pin_fields(best["cand"])
+        f = osm.to_pin_fields(best["cand"])
         if f["status"] == "closed":
             stats["closed"] += 1
 
@@ -193,7 +196,7 @@ def apply_results(pins, work, cache):
                 if reel["url"] not in {x["url"] for x in target["reels"]}:
                     target["reels"].append(reel)
                 continue
-            new = {"id": "g:" + f["place_id"], "name": f["name"], "lat": f["lat"], "lng": f["lng"],
+            new = {"id": f["place_id"], "name": f["name"], "lat": f["lat"], "lng": f["lng"],
                    "address": f["address"], "category": guess_category(best["cand"], reel),
                    "status": f["status"], "rating": f["rating"], "rating_count": f["rating_count"],
                    "price_level": f["price_level"], "hours": f["hours"], "website": f["website"],
@@ -209,16 +212,10 @@ def apply_results(pins, work, cache):
     return stats
 
 
-FOOD_TYPES = ("restaurant", "cafe", "bar", "bakery", "food", "meal", "coffee", "pub",
-              "ice_cream", "dessert", "brunch", "breakfast", "pizza", "sandwich")
-
-
 def guess_category(place, reel):
-    t = (place.get("primaryType") or "").lower()
-    if any(k in t for k in FOOD_TYPES):
-        return "restaurant/food"
-    if t:
-        return "activity"
+    cat = osm.guess_category_from_tags(place.get("tags") or {})
+    if cat:
+        return cat
     text = ((reel.get("caption") or "") + " " + (reel.get("owner") or "")).lower()
     return "restaurant/food" if any(k in text for k in
                                     ("eat", "food", "restaurant", "brunch", "dinner", "lunch",

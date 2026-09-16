@@ -41,6 +41,10 @@ const $ = (id) => document.getElementById(id);
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/* esc() makes text safe inside markup, but it does nothing to a URL scheme -
+   href="javascript:..." survives it untouched. Anything that becomes an href goes
+   through here instead. */
+const safeUrl = (u) => (/^https?:\/\//i.test(String(u || '')) ? String(u) : '');
 const svg = (paths, size) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">${paths}</svg>`;
 
@@ -126,21 +130,72 @@ function visible() {
   return out;
 }
 
+/* Below LABEL_ZOOM there are no labels, so an individual teardrop carries no information
+   you can act on - 150 of them overlapping is just noise. Cluster there and let the real
+   custom pins take over at the zoom where they start being readable. A pixel grid is
+   enough; a clustering library would cost a dependency and fight the pin design. */
+const CLUSTER_PX = 66;   // must exceed the largest bubble or neighbours collide
+
+function clusterIcon(n, dominant) {
+  const size = n > 60 ? 48 : n > 15 ? 43 : 37;
+  return L.divIcon({
+    className: '',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    html: `<div class="cluster" style="--c:${cssVar(dominant)};width:${size}px;height:${size}px">
+             <span>${n}</span></div>`,
+  });
+}
+
+function renderClusters(pins) {
+  const buckets = new Map();
+  for (const p of pins) {
+    const pt = map.latLngToContainerPoint([p.lat, p.lng]);
+    const key = `${Math.floor(pt.x / CLUSTER_PX)}:${Math.floor(pt.y / CLUSTER_PX)}`;
+    let b = buckets.get(key);
+    if (!b) buckets.set(key, (b = { items: [], x: 0, y: 0 }));
+    b.items.push(p);
+    b.x += p.lat;
+    b.y += p.lng;
+  }
+  for (const b of buckets.values()) {
+    const n = b.items.length;
+    const centre = [b.x / n, b.y / n];
+    if (n === 1) {
+      const p = b.items[0];
+      L.marker([p.lat, p.lng], { icon: makeIcon(p, p.id === selectedId, false), keyboard: false })
+        .on('click', () => openDetail(p.id)).addTo(layer);
+      continue;
+    }
+    const counts = {};
+    for (const p of b.items) counts[p.category] = (counts[p.category] || 0) + 1;
+    const top = Object.entries(counts).sort((a, b2) => b2[1] - a[1])[0][0];
+    const cat = CATS[top] || CATS.other;
+    L.marker(centre, { icon: clusterIcon(n, cat.varName), keyboard: false })
+      .on('click', () => map.setView(centre, Math.min(map.getZoom() + 3, LABEL_ZOOM + 1),
+                                    { animate: true }))
+      .addTo(layer);
+  }
+}
+
 function renderMarkers() {
-  const withLabel = map.getZoom() >= LABEL_ZOOM;
+  const zoom = map.getZoom();
   const bounds = map.getBounds().pad(VIEWPORT_PAD);
   layer.clearLayers();
-  let drawn = 0;
-  for (const p of visible()) {
-    if (!bounds.contains([p.lat, p.lng])) continue;   // viewport culling
-    drawn++;
+  const inView = visible().filter((p) => bounds.contains([p.lat, p.lng]));
+
+  if (zoom < LABEL_ZOOM) {
+    renderClusters(inView);
+    return inView.length;
+  }
+  for (const p of inView) {
     L.marker([p.lat, p.lng], {
-      icon: makeIcon(p, p.id === selectedId, withLabel),
+      icon: makeIcon(p, p.id === selectedId, true),
       keyboard: false,
       zIndexOffset: p.id === selectedId ? 1000 : 0,
     }).on('click', () => openDetail(p.id)).addTo(layer);
   }
-  return drawn;
+  return inView.length;
 }
 
 /* ---------- chrome ---------- */
@@ -195,25 +250,51 @@ function renderChips() {
 function refresh() {
   renderChips();
   renderCount();
+  measureChrome();
   renderMarkers();
   if (sheetMode === 'list') renderList();
 }
 
+/* The bottom bar's height depends on the safe-area inset and whether the closed-venues
+   chip is present, so measure it rather than hardcoding a guess. */
+function measureChrome() {
+  const h = $('chromeBottom').offsetHeight;
+  document.documentElement.style.setProperty('--chrome-h', `${h}px`);
+}
+addEventListener('resize', measureChrome);
+addEventListener('orientationchange', () => setTimeout(measureChrome, 120));
+
 /* ---------- sheet ---------- */
+let lastFocus = null;
+
 function openSheet(html, mode) {
+  const wasOpen = sheetMode !== null;
   sheetMode = mode;
+  if (!wasOpen) lastFocus = document.activeElement;
   $('sheetBody').innerHTML = html;
   $('sheetBody').scrollTop = 0;
-  $('sheet').classList.add('open');
+  const sheet = $('sheet');
+  sheet.style.transform = '';
+  sheet.classList.add('open');
+  // Below the wide breakpoint the scrim really does block the map, so say so honestly
+  // instead of always claiming false.
+  sheet.setAttribute('aria-modal', String(innerWidth < 840));
   $('scrim').classList.add('on');
   $('app').classList.add('panel-open');
+  if (!wasOpen) sheet.focus({ preventScroll: true });
 }
+
 function closeSheet() {
+  if (sheetMode === null) return;
   sheetMode = null;
   selectedId = null;
-  $('sheet').classList.remove('open');
+  const sheet = $('sheet');
+  sheet.classList.remove('open');
+  sheet.style.transform = '';
   $('scrim').classList.remove('on');
   $('app').classList.remove('panel-open');
+  if (lastFocus && document.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
+  lastFocus = null;
   renderMarkers();
 }
 
@@ -236,6 +317,15 @@ function hoursBadge(p) {
     : '<span class="badge shut">Closed today</span>';
 }
 
+/* The caption is the whole reason a place is on this map, and for most pins it is the
+   only content there is. Pull the first meaningful line up above the fold. */
+function firstLine(caption) {
+  const line = String(caption).split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !/^#/.test(l) && l.replace(/[^\w]/g, '').length > 12)[0] || '';
+  return line.length > 150 ? line.slice(0, 149).trimEnd() + '…' : line;
+}
+
 function openDetail(id) {
   const p = PINS.find((x) => x.id === id);
   if (!p) return;
@@ -256,7 +346,7 @@ function openDetail(id) {
   const reels = `
     <div class="sec-label">${p.reels.length === 1 ? 'The reel' : `${p.reels.length} reels`}</div>
     ${p.reels.map((r) => `
-      <a class="reel-card" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">
+      <a class="reel-card" href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer">
         <div class="reel-top">${svg(I_PLAY, 13)}<span class="reel-owner">${esc(r.owner || 'Watch on Instagram')}</span></div>
         ${r.caption ? `<div class="reel-cap">${esc(r.caption)}</div>` : ''}
       </a>`).join('')}`;
@@ -269,15 +359,21 @@ function openDetail(id) {
         <div class="v-sub">${esc(cat.label)}${dist}${p.address ? ' · ' + esc(p.address) : ''}</div>
       </div>
     </div>
+    ${p.reels[0] && p.reels[0].caption
+      ? `<div class="v-hook">${esc(firstLine(p.reels[0].caption))}</div>` : ''}
     <div class="v-meta">${ratingBadge(p)}${priceBadge(p)}${hoursBadge(p)}</div>
     <div class="v-actions">
       <a class="btn primary" href="${esc(maps)}" target="_blank" rel="noopener">${svg(I_NAV, 15)} Directions</a>
-      ${p.website ? `<a class="btn" href="${esc(p.website)}" target="_blank" rel="noopener">Website</a>` : ''}
+      ${safeUrl(p.website) ? `<a class="btn" href="${esc(safeUrl(p.website))}" target="_blank" rel="noopener">Website</a>` : ''}
       ${p.phone ? `<a class="btn" href="tel:${esc(p.phone)}">Call</a>` : ''}
     </div>
     ${hours}${reels}`, 'detail');
 
-  map.panTo([p.lat, p.lng], { animate: true });
+  // On the wide layout a 420px panel covers the left of the map, so centring on the
+  // container would put the pin behind it.
+  const offset = innerWidth >= 840 ? -210 : 0;
+  const pt = map.project([p.lat, p.lng], map.getZoom()).subtract([offset, 0]);
+  map.panTo(map.unproject(pt, map.getZoom()), { animate: true });
   renderMarkers();
 }
 
@@ -324,6 +420,39 @@ function renderList() {
     renderList();
   };
 }
+
+/* The grabber implies a swipe. Without this it is decoration that lies about what the
+   sheet can do, and swiping down is the first thing an iOS user tries. */
+(function enableSwipeToDismiss() {
+  const sheet = $('sheet');
+  const body = $('sheetBody');
+  let startY = 0, dy = 0, dragging = false;
+
+  sheet.addEventListener('touchstart', (e) => {
+    if (innerWidth >= 840) return;          // side panel on wide screens, no swipe
+    // Only start a drag from the top of the content, so scrolling the list still works.
+    if (e.target.closest('.sheet-body') && body.scrollTop > 0) return;
+    startY = e.touches[0].clientY;
+    dy = 0;
+    dragging = true;
+    sheet.style.transition = 'none';
+  }, { passive: true });
+
+  sheet.addEventListener('touchmove', (e) => {
+    if (!dragging) return;
+    dy = e.touches[0].clientY - startY;
+    if (dy < 0) dy = dy / 6;                // resist upward, there is no taller detent
+    sheet.style.transform = `translateY(${dy}px)`;
+  }, { passive: true });
+
+  sheet.addEventListener('touchend', () => {
+    if (!dragging) return;
+    dragging = false;
+    sheet.style.transition = '';
+    sheet.style.transform = '';
+    if (dy > Math.min(120, sheet.offsetHeight * 0.25)) closeSheet();
+  });
+})();
 
 /* ---------- geolocation ---------- */
 let toastTimer = null;
@@ -377,7 +506,15 @@ $('searchInput').addEventListener('input', (e) => {
   searchTimer = setTimeout(() => {
     term = v.trim().toLowerCase();
     refresh();
-    if (term && sheetMode !== 'detail') renderList();
+    if (!term) return;
+    // If a card is open and the new search excludes it, the card is stale - swap to the
+    // results rather than leaving a venue on screen that no longer matches.
+    if (sheetMode === 'detail') {
+      const shown = PINS.find((x) => x.id === selectedId);
+      if (!shown || !matches(shown)) renderList();
+      return;
+    }
+    renderList();
   }, 130);
 });
 $('clearBtn').onclick = () => {
@@ -428,6 +565,14 @@ fetch('pins.json')
     toast('Could not load places. Check your connection.');
   });
 
+/* Not on localhost: a cached shell during development means you spend ten minutes
+   debugging code the browser isn't running. It bit us twice. The SW is for the phone. */
+const IS_DEV = ['localhost', '127.0.0.1'].includes(location.hostname);
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  if (IS_DEV) {
+    navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
+    if (window.caches) caches.keys().then((ks) => ks.forEach((k) => caches.delete(k)));
+  } else {
+    addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
 }

@@ -32,11 +32,15 @@
   <div id="map"></div>
 
   <div class="chrome-top">
-    <div class="header-card glass">
-      <div class="header-row">
-        <span class="wordmark">Faisal's <em>London</em></span>
-        <span class="count" id="count"></span>
-      </div>
+    <div class="wordmark-pill glass">
+      <span class="wordmark">Faisal's <em>London</em></span>
+      <span class="count" id="count"></span>
+    </div>
+  </div>
+
+  <div class="chrome-bottom" id="chromeBottom">
+    <div class="chip-row" id="chipRow" role="group" aria-label="Filters"></div>
+    <div class="search-card glass">
       <div class="search-row">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input type="search" id="searchInput" placeholder="Search places, food, vibes…"
@@ -47,7 +51,6 @@
         </button>
       </div>
     </div>
-    <div class="chip-row" id="chipRow" role="group" aria-label="Filters"></div>
   </div>
 
   <div class="side-rail">
@@ -63,7 +66,7 @@
   </div>
 
   <div class="scrim" id="scrim"></div>
-  <div class="sheet glass" id="sheet" role="dialog" aria-modal="false" aria-label="Place details">
+  <div class="sheet glass" id="sheet" role="dialog" aria-modal="false" tabindex="-1" aria-label="Place details">
     <div class="sheet-grip"></div>
     <div class="sheet-body" id="sheetBody"></div>
   </div>

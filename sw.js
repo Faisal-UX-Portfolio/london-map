@@ -2,7 +2,7 @@
    Map tiles are deliberately NOT cached - the tile set for 450 venues across London is
    unbounded, and OSM's usage policy discourages bulk caching. You get the app, your
    places and their details offline; you just don't get fresh map imagery. */
-const V = 'london-v1';
+const V = 'london-v2';
 const SHELL = [
   './', 'index.html', 'style.css', 'app.js',
   'vendor/leaflet-1.9.4.js', 'vendor/leaflet-1.9.4.css',
