@@ -1,0 +1,57 @@
+[
+  {"id": "daf830cec600", "no_venue": true, "reason": "only area given (China Town); no venue named in caption text (owner excluded per rules)", "venues": []},
+  {"id": "25c867040772", "no_venue": false, "reason": null,
+   "venues": [{"name": "Mere", "area_hint": null, "source_signal": "other"}]},
+  {"id": "0b6ac9024129", "no_venue": false, "reason": null,
+   "venues": [
+     {"name": "Hoko", "area_hint": "Soho", "source_signal": "handle"},
+     {"name": "Wun's Tea Room", "area_hint": "Soho", "source_signal": "handle"}
+   ]},
+  {"id": "9ac1ed7cb4b3", "no_venue": true, "reason": "not London (Los Angeles venue, per #thingstodoinla)", "venues": []},
+  {"id": "147a569a6ed3", "no_venue": false, "reason": null,
+   "venues": [
+     {"name": "Real Beijing", "area_hint": "China Town", "source_signal": "numbered_list"},
+     {"name": "Hotto Potto", "area_hint": "Aldgate East", "source_signal": "numbered_list"},
+     {"name": "Assa", "area_hint": "Soho", "source_signal": "numbered_list"}
+   ]},
+  {"id": "d2471d510f41", "no_venue": false, "reason": null,
+   "venues": [
+     {"name": "Bread Ahead", "area_hint": "Borough Market", "source_signal": "handle"},
+     {"name": "La Tua Pasta", "area_hint": "Borough Market", "source_signal": "handle"},
+     {"name": "Mei Mei", "area_hint": "Borough Market", "source_signal": "handle"},
+     {"name": "Juma Kitchen", "area_hint": "Borough Market", "source_signal": "handle"}
+   ]},
+  {"id": "e494916f5b20", "no_venue": true, "reason": "train ticket hack, no venue", "venues": []},
+  {"id": "a981701dc51a", "no_venue": true, "reason": "recipe post, no venue", "venues": []},
+  {"id": "ab2afc7ecaa1", "no_venue": true, "reason": "thank-you to a customer, no venue named in caption (owner excluded per rules)", "venues": []},
+  {"id": "11f32d3cde7a", "no_venue": true, "reason": "not London (Edinburgh, Scotland)", "venues": []},
+  {"id": "cae487fd6f47", "no_venue": true, "reason": "self-promo post, no separately named venue (owner excluded per rules)", "venues": []},
+  {"id": "665798ea89ca", "no_venue": true, "reason": "self-promo post, no separately named venue (owner excluded per rules)", "venues": []},
+  {"id": "1776409935fa", "no_venue": false, "reason": null,
+   "venues": [
+     {"name": "Shot", "area_hint": "Mayfair", "source_signal": "pin_emoji"},
+     {"name": "Entrée", "area_hint": "Mayfair", "source_signal": "pin_emoji"},
+     {"name": "H R Higgins", "area_hint": "Mayfair", "source_signal": "pin_emoji"},
+     {"name": "Cafe Kitsuné", "area_hint": "Belgravia", "source_signal": "pin_emoji"},
+     {"name": "Eve at Ember Locke Hotel", "area_hint": "Kensington", "source_signal": "pin_emoji"},
+     {"name": "TomTom Coffee", "area_hint": "Belgravia", "source_signal": "pin_emoji"},
+     {"name": "Beam", "area_hint": "Notting Hill", "source_signal": "pin_emoji"},
+     {"name": "WA Café", "area_hint": "Marylebone", "source_signal": "pin_emoji"}
+   ]},
+  {"id": "3949547bcd8b", "no_venue": true, "reason": "no venue named", "venues": []},
+  {"id": "ced19b9a931c", "no_venue": true, "reason": "no venue named, only hashtags/category", "venues": []},
+  {"id": "c09c168d6abd", "no_venue": false, "reason": null,
+   "venues": [{"name": "Tozi", "area_hint": "Victoria", "source_signal": "handle"}]},
+  {"id": "d9d5d634cd6b", "no_venue": false, "reason": null,
+   "venues": [{"name": "Eat Tokyo", "area_hint": null, "source_signal": "other"}]},
+  {"id": "50dfdafb9c38", "no_venue": true, "reason": "recipe post, tagged handle is a food creator not a venue", "venues": []},
+  {"id": "0f787f3e7b44", "no_venue": false, "reason": null,
+   "venues": [{"name": "Sketch", "area_hint": null, "source_signal": "hashtag"}]},
+  {"id": "7b3752fe5471", "no_venue": false, "reason": null,
+   "venues": [
+     {"name": "Seven Dials Market", "area_hint": null, "source_signal": "handle"},
+     {"name": "Your Coffee Hub", "area_hint": null, "source_signal": "handle"},
+     {"name": "British Patagonia", "area_hint": null, "source_signal": "handle"},
+     {"name": "Prada Patisserie", "area_hint": "Harrods", "source_signal": "handle"}
+   ]}
+]

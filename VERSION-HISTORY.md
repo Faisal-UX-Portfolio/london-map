@@ -34,3 +34,31 @@ Built in a Claude.ai chat, delivered as `london-reels-map-handoff.zip`.
 - Single-file HTML app with Leaflet inlined, Apple Maps–style Liquid Glass styling,
   category filter chips, search, geolocate, theme toggle and a bottom sheet with a
   working Apple Maps directions link
+
+---
+
+## 2026-09-16 — Step 2: mined the 101 unmapped reels
+
+**111 venue candidates recovered from 57 reels** (44 reels have no usable venue).
+54 of those came from listicle expansion — reels naming several venues at once, the
+biggest yielding 11.
+
+- `scripts/extract_venues.py` — `prepare` writes ID-keyed batches, `collect` validates
+  subagent output and merges. The id-set assert (D-006) passed on every batch.
+- Five Sonnet subagents processed ~20 captions each against
+  `data/batches/INSTRUCTIONS.md`.
+- Output: `data/extracted-venues.json`, `data/no-venue-reels.json`.
+
+**Two recall bugs found and fixed mid-step**, both of which silently discarded real venues:
+
+1. The recipe prefilter fired on the bare word "ingredients", binning three venue posts
+   that used it in review prose (D-012). Prefilter now bins 5 instead of 9.
+2. The extraction rules told subagents the owner is never a venue, which discarded six
+   restaurants posting about their own menus (D-013).
+
+Both were caught by reading the subagents' own reasoning rather than just their output
+counts. Re-running all five batches after the fixes took the yield from 102 venues across
+49 reels to **111 across 57**.
+
+Agents correctly excluded out-of-London content: Manchester, Portsmouth, Edinburgh, Los
+Angeles and Tempe AZ.

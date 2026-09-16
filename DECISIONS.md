@@ -162,3 +162,38 @@ convention is needed.
 fails on some reels is worse than one that costs five seconds of typing. Typing the name
 also produces a better search query than a caption parse usually would — you know what the
 place is called at the moment you save it.
+
+---
+
+## D-012 — The recipe prefilter needs two weak signals, or one strong one
+**2026-09-16 · settled · fixed a real recall bug**
+
+`STRONG_RECIPE_RE` (tbsp, tsp, preheat, "serves 2", kcal, "full recipe") fires on its own.
+`WEAK_RECIPE_RE` (ingredients, oven, whisk, simmer) needs two distinct hits to count.
+
+**Why:** the first version treated the bare word "ingredients" as sufficient, and binned
+three real venue posts that used it in review prose — "high volume, great ingredients".
+Pasta Station, Kebhouze and a Soho pasta spot were all silently discarded before any
+subagent saw them. Prefiltering is a cost optimisation, so it must be conservative: a
+false positive here is a venue lost with no trace, while a false negative just costs one
+extra subagent call.
+
+Bin count dropped 9 → 5 after the fix.
+
+---
+
+## D-013 — A venue posting about itself is a venue
+**2026-09-16 · settled · fixed a real recall bug**
+
+The extraction rules originally said "the owner is the creator, not a venue". True for
+food bloggers, wrong for businesses: Fallow, Noodle Inn, The Knot Churros, Ayllu
+Restaurant, Zen Touch and Cocomelt all post about their own menus and opening hours, and
+all six were being discarded.
+
+The rule now distinguishes by *tells* — first-person plural about a menu or premises
+("our tasting menu", "visiting us"), stated opening hours or a trading name mean the owner
+is the venue; a personal name or persona handle reviewing in the third person means it is a
+creator. **When genuinely ambiguous, extract it** — confidence scoring filters a bad
+candidate later, but a missed venue is gone for good.
+
+Recovered 9 venues across 8 reels.
