@@ -1,0 +1,28 @@
+[
+ {
+  "reason": "same_coords_different_name",
+  "names": [
+   "Nan Hotpot",
+   "RedBox Karaoke"
+  ],
+  "lat": 51.5110617,
+  "lng": -0.130171,
+  "reel_urls": [
+   "https://www.instagram.com/reel/DB1xi32Amba/",
+   "https://www.instagram.com/reel/DLw8OeWK8zR/"
+  ]
+ },
+ {
+  "reason": "same_coords_different_name",
+  "names": [
+   "106 Shaftesbury Ave",
+   "Hefaure"
+  ],
+  "lat": 51.5122968,
+  "lng": -0.1309505,
+  "reel_urls": [
+   "https://www.instagram.com/reel/C-KDpKlo6hz/",
+   "https://www.instagram.com/reel/CyAbQGmOmlm/"
+  ]
+ }
+]

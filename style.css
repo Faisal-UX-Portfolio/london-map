@@ -1,0 +1,391 @@
+/* Faisal's London - Liquid Glass
+   Design rules live in CLAUDE.md. The short version: one continuous glass surface per
+   group (never stacked), concentric radii, a specular highlight on every glass edge,
+   native SF, and iOS system colours light-first. */
+
+:root {
+  /* Surface */
+  --bg: #f2f2f7;
+  --panel: 255, 255, 255;
+  --panel-a: 0.62;
+  --panel-solid: #ffffff;
+  --glass-shine: rgba(255, 255, 255, 0.75);
+  --glass-edge: rgba(255, 255, 255, 0.55);
+  --hairline: rgba(60, 60, 67, 0.16);
+  --fill: rgba(120, 120, 128, 0.12);
+  --fill-strong: rgba(120, 120, 128, 0.2);
+
+  /* Ink */
+  --text: #000000;
+  --muted: rgba(60, 60, 67, 0.6);
+  --muted-2: rgba(60, 60, 67, 0.42);
+
+  /* Accent - true iOS system colours. Orange was tried for food and reverted: it
+     clashed with systemBlue, which every interactive element uses. */
+  --food: #ff3b30;
+  --activity: #30b0c7;
+  --other: #8e8e93;
+  --spark: #007aff;
+  --star: #ff9500;
+  --closed: #8e8e93;
+
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  --shadow-lift: 0 16px 44px rgba(0, 0, 0, 0.18);
+  --blur: blur(40px) saturate(180%);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #000000;
+  --panel: 40, 40, 42;
+  --panel-a: 0.58;
+  --panel-solid: #1c1c1e;
+  --glass-shine: rgba(255, 255, 255, 0.22);
+  --glass-edge: rgba(255, 255, 255, 0.16);
+  --hairline: rgba(255, 255, 255, 0.12);
+  --fill: rgba(120, 120, 128, 0.24);
+  --fill-strong: rgba(120, 120, 128, 0.36);
+  --text: #ffffff;
+  --muted: rgba(235, 235, 245, 0.6);
+  --muted-2: rgba(235, 235, 245, 0.42);
+  --food: #ff453a;
+  --activity: #40c8e0;
+  --other: #98989d;
+  --spark: #0a84ff;
+  --star: #ffb340;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  --shadow-lift: 0 16px 44px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input { font: inherit; color: inherit; }
+button { border: 0; background: none; padding: 0; cursor: pointer; }
+
+/* ---------- glass ---------- */
+/* The specular highlight (inset 0 1px 0) is the thing that separates this from generic
+   blur - real glass lenses light along its top edge. */
+.glass {
+  background: rgba(var(--panel), var(--panel-a));
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 0.5px solid var(--glass-edge);
+  box-shadow: var(--shadow), inset 0 1px 0 var(--glass-shine);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass { background: var(--panel-solid); }
+}
+
+/* ---------- layout ---------- */
+#app { position: relative; height: 100dvh; width: 100%; overflow: hidden; }
+#map { position: absolute; inset: 0; z-index: 1; background: var(--bg); }
+.leaflet-control-zoom, .leaflet-control-attribution { display: none; }
+.leaflet-tile { filter: saturate(0.92); }
+:root[data-theme="dark"] .leaflet-tile {
+  filter: saturate(0.6) brightness(0.78) invert(0.92) hue-rotate(180deg) contrast(0.95);
+}
+
+/* ---------- top chrome ---------- */
+.chrome-top {
+  position: absolute; z-index: 30;
+  top: 0; left: 0; right: 0;
+  padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-left))
+           0 max(12px, env(safe-area-inset-right));
+  pointer-events: none;
+}
+.chrome-top > * { pointer-events: auto; }
+
+/* Header and search are ONE glass surface, not two stacked - stacked translucency
+   reads muddy, which is Apple's own guidance. */
+.header-card {
+  --r: 22px;
+  --pad: 10px;
+  border-radius: var(--r);
+  padding: var(--pad);
+}
+
+.header-row {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 4px 8px 9px;
+}
+.wordmark { font-size: 19px; font-weight: 700; letter-spacing: -0.4px; }
+.wordmark em { font-style: normal; color: var(--spark); }
+.count { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Concentric radius: parent radius minus parent padding. Not an arbitrary number. */
+.search-row {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--fill);
+  border-radius: calc(var(--r) - var(--pad));
+  padding: 0 10px;
+  height: 38px;
+}
+.search-row svg { flex: none; color: var(--muted); }
+#searchInput {
+  flex: 1; min-width: 0; border: 0; background: none; outline: none;
+  font-size: 16px; /* 16px or iOS zooms the page on focus */
+  padding: 0;
+}
+#searchInput::placeholder { color: var(--muted-2); }
+/* type="search" gives us the right iOS keyboard, but WebKit draws its own clear button
+   on top of ours. Hide theirs, keep ours. */
+#searchInput::-webkit-search-cancel-button,
+#searchInput::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+.clear-btn {
+  flex: none; width: 20px; height: 20px; border-radius: 50%;
+  display: none; place-items: center;
+  background: var(--fill-strong); color: var(--muted);
+}
+.clear-btn.on { display: grid; }
+
+/* ---------- filter chips ---------- */
+.chip-row {
+  display: flex; gap: 7px; margin-top: 9px;
+  overflow-x: auto; scrollbar-width: none;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.chip-row::-webkit-scrollbar { display: none; }
+
+.chip {
+  flex: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 13px;
+  border-radius: 16px;
+  font-size: 13.5px; font-weight: 600; letter-spacing: -0.1px;
+  white-space: nowrap;
+  color: var(--text);
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.chip .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.chip .n { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip[aria-pressed="true"] {
+  background: var(--spark);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.chip[aria-pressed="true"] .n { color: rgba(255, 255, 255, 0.72); }
+.chip[aria-pressed="true"] .dot { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.5); }
+
+/* ---------- floating side rail ---------- */
+/* Separate circles, not bundled into the search card - this is what real Apple Maps
+   does with its compass and location controls. */
+.side-rail {
+  position: absolute; z-index: 25;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 84px);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.rail-btn {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: grid; place-items: center;
+  color: var(--text);
+  transition: transform 0.15s ease;
+}
+.rail-btn:active { transform: scale(0.92); }
+.rail-btn.active { color: var(--spark); }
+.rail-btn.locating svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- map pins ---------- */
+.pin-wrap { position: relative; }
+.map-pin {
+  width: 30px; height: 38px;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.32));
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: 50% 100%;
+}
+.pin-wrap.selected .map-pin { transform: scale(1.28); }
+.pin-wrap.is-closed { opacity: 0.55; }
+
+.pin-label {
+  position: absolute; left: 50%; top: 100%;
+  transform: translateX(-50%);
+  margin-top: 2px;
+  max-width: 132px;
+  padding: 2px 7px;
+  border-radius: 8px;
+  font-size: 11px; font-weight: 600; letter-spacing: -0.1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text);
+  background: rgba(var(--panel), 0.86);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16), inset 0 0.5px 0 var(--glass-shine);
+  pointer-events: none;
+}
+
+/* the blue "you are here" dot */
+.me-dot {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--spark);
+  border: 2.5px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 122, 255, 0.5);
+}
+
+/* ---------- bottom sheet ---------- */
+.scrim {
+  position: absolute; inset: 0; z-index: 40;
+  background: rgba(0, 0, 0, 0.18);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+.scrim.on { opacity: 1; pointer-events: auto; }
+
+.sheet {
+  position: absolute; z-index: 50;
+  left: 0; right: 0; bottom: 0;
+  max-height: 86dvh;
+  border-radius: 26px 26px 0 0;
+  transform: translateY(101%);
+  transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+  display: flex; flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.sheet.open { transform: translateY(0); }
+
+.sheet-grip {
+  flex: none; width: 36px; height: 5px; border-radius: 3px;
+  background: var(--fill-strong);
+  margin: 8px auto 2px;
+}
+.sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 6px 18px 20px; }
+
+/* ---------- detail ---------- */
+.v-head { display: flex; align-items: flex-start; gap: 11px; padding-top: 6px; }
+.v-glyph {
+  flex: none; width: 38px; height: 38px; border-radius: 11px;
+  display: grid; place-items: center; color: #fff;
+}
+.v-name { font-size: 21px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.2; }
+.v-sub { font-size: 13.5px; color: var(--muted); margin-top: 3px; }
+
+.v-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 11px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 25px; padding: 0 9px; border-radius: 8px;
+  background: var(--fill);
+  font-size: 12.5px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.badge .rc { color: var(--muted); font-weight: 500; }
+.badge svg { color: var(--star); }
+.badge.open-now { color: #248a3d; background: rgba(52, 199, 89, 0.16); }
+.badge.shut { color: var(--closed); }
+.badge.permanently-closed { background: rgba(142, 142, 147, 0.2); color: var(--muted); }
+
+.v-actions { display: flex; gap: 8px; margin: 14px 0 4px; }
+.btn {
+  flex: 1;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 42px; border-radius: 12px;
+  font-size: 14.5px; font-weight: 600;
+  background: var(--fill); color: var(--text);
+  text-decoration: none;
+  transition: transform 0.14s ease;
+}
+.btn:active { transform: scale(0.97); }
+.btn.primary {
+  background: var(--spark); color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.sec-label {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--muted-2); margin: 18px 0 8px;
+}
+
+.hours-list { display: grid; gap: 3px; }
+.hours-row { display: flex; justify-content: space-between; font-size: 13.5px; gap: 12px; }
+.hours-row.today { font-weight: 700; }
+.hours-row span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+.hours-row.today span:last-child { color: var(--text); }
+
+.reel-card {
+  display: block; text-decoration: none; color: inherit;
+  background: var(--fill); border-radius: 14px;
+  padding: 11px 12px; margin-bottom: 8px;
+  transition: transform 0.14s ease;
+}
+.reel-card:active { transform: scale(0.98); }
+.reel-top { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 650; }
+.reel-top .play { color: var(--spark); flex: none; }
+.reel-owner { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reel-cap {
+  font-size: 12.5px; color: var(--muted); margin-top: 5px; line-height: 1.42;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* ---------- results list ---------- */
+.res-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 2px 0 10px;
+}
+.res-title { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+.res-sort { font-size: 13.5px; font-weight: 600; color: var(--spark); }
+
+.res-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 2px;
+  border-bottom: 0.5px solid var(--hairline);
+  width: 100%; text-align: left;
+}
+.res-item:last-child { border-bottom: 0; }
+.res-glyph { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: #fff; }
+.res-main { flex: 1; min-width: 0; }
+.res-name { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; display: flex; gap: 6px; align-items: center; }
+.res-sub .sep { color: var(--muted-2); }
+.res-dist { flex: none; font-size: 12.5px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.res-item.is-closed .res-name { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--muted-2); }
+
+.empty { text-align: center; padding: 34px 20px 40px; color: var(--muted); }
+.empty-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 5px; }
+.empty-sub { font-size: 13.5px; line-height: 1.45; }
+
+.toast {
+  position: absolute; z-index: 60;
+  left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 24px);
+  transform: translate(-50%, 14px);
+  padding: 9px 15px; border-radius: 13px;
+  font-size: 13.5px; font-weight: 600;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  max-width: calc(100vw - 40px); text-align: center;
+}
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Wide screens: the sheet becomes a left-hand panel, like Apple Maps on iPad. */
+@media (min-width: 840px) {
+  .chrome-top { max-width: 400px; }
+  .sheet {
+    right: auto; top: 0; bottom: 0;
+    width: 400px;
+    max-height: none;
+    border-radius: 0;
+    transform: translateX(-101%);
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+  .sheet.open { transform: translateX(0); }
+  .sheet-grip { display: none; }
+  .chrome-top { left: 0; transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1); }
+  #app.panel-open .chrome-top { transform: translateX(400px); }
+  .scrim { display: none; }
+}
