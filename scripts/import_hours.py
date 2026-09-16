@@ -233,7 +233,31 @@ def main():
             stats["text_only"] += 1
             unparsed.append((name, text))
 
+    # A handful of pins still carry hours from the original Google export
+    # ("Mon: 7:30 AM-6:00 PM") with no machine-readable ranges, so they would never match
+    # "Open now". Same times, just an older format - backfill rather than discard.
+    backfilled = 0
+    for pin in pins:
+        if not isinstance(pin.get("hours"), list) or pin.get("open_ranges"):
+            continue
+        ranges, ok = [], True
+        for line in pin["hours"]:
+            rest = line.split(":", 1)[1].strip() if ":" in line else line
+            if re.match(r"^(closed|shut)$", rest, re.I):
+                ranges.append([])
+                continue
+            day = [parse_range(part) for part in rest.split(",")]
+            if any(d is None for d in day):
+                ok = False
+                break
+            ranges.append([list(d) for d in day])
+        if ok and len(ranges) == 7:
+            pin["open_ranges"] = ranges
+            backfilled += 1
+
     print(f"source rows: {len(rows)}")
+    if backfilled:
+        print(f"  {backfilled} pin(s) backfilled from legacy Google-format hours")
     print(f"  {stats['parsed']} parsed into a 7-day schedule")
     print(f"  {stats['text_only']} kept as display text only (could not parse confidently)")
     print(f"  {stats['closed']} marked permanently closed")
